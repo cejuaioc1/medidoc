@@ -1,1 +1,2108 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MediDoc - Guia Clínico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input, textarea { font-size: 16px !important; }
+        body { -webkit-tap-highlight-color: transparent; }
+        html, body { background-color: #020617; }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(1200px 600px at 10% -10%, rgba(59,130,246,0.12), transparent 60%),
+                radial-gradient(900px 500px at 100% 0%, rgba(16,185,129,0.08), transparent 55%),
+                radial-gradient(800px 500px at 50% 110%, rgba(139,92,246,0.10), transparent 60%);
+            z-index: 0;
+        }
+        main, header, nav { position: relative; z-index: 1; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 8px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
 
+    <header class="bg-slate-900/70 backdrop-blur-xl text-white px-3 py-2 flex items-center justify-between shadow-lg shadow-black/40 z-20 sticky top-0 border-b border-slate-800/80">
+        <div class="flex items-center space-x-2 cursor-pointer" onclick="switchTab('home')">
+            <div class="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white text-sm shadow-lg shadow-blue-500/30">
+                <i class="fa-solid fa-stethoscope"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm tracking-wide leading-tight">MediDoc</h1>
+                <p class="text-[8px] text-slate-400 uppercase tracking-widest font-semibold">Guia Clínico</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-0.5">
+            <button onclick="switchTab('sobre')" class="text-slate-300 hover:text-white hover:bg-slate-800/70 w-8 h-8 rounded-full flex items-center justify-center transition">
+                <i class="fa-solid fa-circle-info text-base"></i>
+            </button>
+        </div>
+    </header>
+
+    <main id="main-content" class="flex-1 max-w-3xl w-full mx-auto p-4 pb-24 hide-scrollbar"></main>
+
+    <nav class="fixed bottom-0 left-0 right-0 bg-slate-900/80 backdrop-blur-xl border-t border-slate-800/80 flex justify-around items-center h-16 shadow-[0_-8px_20px_-6px_rgba(0,0,0,0.6)] z-30 pb-safe">
+        <button onclick="switchTab('home')" id="nav-home" class="flex flex-col items-center justify-center w-full h-full text-blue-400 transition-colors">
+            <i class="fa-solid fa-house text-lg mb-1"></i><span class="text-[10px] font-semibold">Home</span>
+        </button>
+        <button onclick="switchTab('doencas')" id="nav-doencas" class="flex flex-col items-center justify-center w-full h-full text-slate-500 hover:text-blue-400 transition-colors">
+            <i class="fa-solid fa-book-medical text-lg mb-1"></i><span class="text-[10px] font-semibold">Doenças</span>
+        </button>
+        <button onclick="switchTab('diluicoes')" id="nav-diluicoes" class="flex flex-col items-center justify-center w-full h-full text-slate-500 hover:text-blue-400 transition-colors">
+            <i class="fa-solid fa-flask text-lg mb-1"></i><span class="text-[10px] font-semibold">Diluições</span>
+        </button>
+        <button onclick="switchTab('pesquisar')" id="nav-pesquisar" class="flex flex-col items-center justify-center w-full h-full text-slate-500 hover:text-blue-400 transition-colors">
+            <i class="fa-solid fa-magnifying-glass text-lg mb-1"></i><span class="text-[10px] font-semibold">Pesquisar</span>
+        </button>
+        <button onclick="switchTab('sobre')" id="nav-sobre" class="flex flex-col items-center justify-center w-full h-full text-slate-500 hover:text-blue-400 transition-colors">
+            <i class="fa-solid fa-user-doctor text-lg mb-1"></i><span class="text-[10px] font-semibold">Sobre</span>
+        </button>
+    </nav>
+
+    <script>
+        let activeTab = 'home';
+        let currentView = 'main';
+        let selectedCategory = null;
+        let editingId = null;
+        let searchQuery = '';
+        let detailDiseaseId = null;
+        let detailDilutionId = null;
+        let previousView = 'specialty-list';
+        let isRestoringFromHistory = false;
+
+        function getStoredData(key, defaultValue) {
+            try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : defaultValue; }
+            catch (e) { return defaultValue; }
+        }
+
+        function getCurrentState() { return { activeTab, currentView, detailDiseaseId, detailDilutionId, selectedCategory, previousView, editingId }; }
+        function pushHistory() { if (isRestoringFromHistory) return; history.pushState(getCurrentState(), '', ''); }
+        function restoreState(state) {
+            if (state) {
+                activeTab = state.activeTab || 'home';
+                currentView = state.currentView || 'main';
+                detailDiseaseId = state.detailDiseaseId || null;
+                detailDilutionId = state.detailDilutionId || null;
+                selectedCategory = state.selectedCategory || null;
+                previousView = state.previousView || 'specialty-list';
+                editingId = state.editingId || null;
+            } else {
+                activeTab = 'home'; currentView = 'main';
+                detailDiseaseId = null; detailDilutionId = null;
+                selectedCategory = null; previousView = 'specialty-list'; editingId = null;
+            }
+            render();
+        }
+
+        // ============================================================
+        // CONTROLE DO BOTÃO VOLTAR DO CELULAR
+        // ============================================================
+        window.addEventListener('popstate', (e) => {
+            const isMainView = currentView === 'main';
+            const isToolbarTab = activeTab !== 'home';
+
+            if (isMainView && isToolbarTab) {
+                activeTab = 'home';
+                currentView = 'main';
+                detailDiseaseId = null;
+                detailDilutionId = null;
+                selectedCategory = null;
+                previousView = 'specialty-list';
+                editingId = null;
+                history.pushState(getCurrentState(), '', '');
+                render();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+
+            if (isMainView && !isToolbarTab) {
+                window.close();
+                history.pushState(getCurrentState(), '', '');
+                return;
+            }
+
+            isRestoringFromHistory = true;
+            restoreState(e.state);
+            isRestoringFromHistory = false;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        // ============ BANCO DE DOENÇAS - ORGANIZADO ALFABETICAMENTE ============
+        const defaultDiseases = [
+            {
+                id: 1, name: 'Abdome Agudo / HDA', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Analgesia escalonada + exames + cirurgia. HDA: estabilização + EDA.',
+                prescriptions: [
+                    { type: 'note', value: 'ABDOME AGUDO' },
+                    { type: 'med', value: 'Analgesia escalonada (Dipirona/Tramadol/Morfina)' },
+                    { type: 'med', value: 'Rx tórax PA com cúpulas + Rx abdome em pé/deitado; HMG; Bilirrubinas, Amilase, Lipase, TGO, TGP, Ur, Cr, Urina I' },
+                    { type: 'note', value: 'HDA' },
+                    { type: 'med', value: 'Toque retal + Lavagem gástrica diagnóstica (se dúvida); Estabilização hemodinâmica' },
+                    { type: 'med', value: 'Omeprazol 40mg EV 12/12h; Octreotide 50mcg bolus + 50mcg/hora' },
+                    { type: 'med', value: 'Se ascite: Norfloxacino 400mg 12/12h por 5d' }
+                ],
+                notes: ''
+            },
+            {
+                id: 2, name: 'Acidose Metabólica', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'pH<7,35 com HCO3<22. Grave: pH<7,1-7,2 ou HCO3<10 ou BE<-15.',
+                prescriptions: [
+                    { type: 'med', value: 'Corrigir causa base (choque, cetoacidose, intox, IR)' },
+                    { type: 'med', value: 'Bicarbonato de Sódio 8,4%: (0,3 x BE x Peso) OU (Bic desejado - Bic encontrado) x 0,4 x P' },
+                    { type: 'med', value: 'Administrar metade em 2-4h, repetir gasometria. Repetir até BE<16' },
+                    { type: 'med', value: 'Alcalinização urina (intox AAS/fenobarbital): 850 mL SG5% + 150 mL Bic 8,4% - manter pH urinário>7,5' }
+                ],
+                notes: 'Anion GAP = [Na+K-(Cl+HCO3)]. VR: 10-14 mEq/L.'
+            },
+            {
+                id: 3, name: 'Admitindo Paciente Grave (Sala Vermelha)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Avaliar responsividade e pulso. Se SEM PULSO → PCR. Se responde/pulso: ABCDE + MOV simultaneamente.',
+                prescriptions: [
+                    { type: 'note', value: 'MOV (Monitorização + Oxigênio + Veia)' },
+                    { type: 'med', value: 'Monitorização: PA/PAM, oximetria, TAX, cardioscopia (DII + FC), glicemia capilar' },
+                    { type: 'med', value: 'O2 suplementar: CN 1-6 L/min / Máscara não reinalante 10-15 L/min / Venturi 3-15 L/min / VNI' },
+                    { type: 'med', value: 'Acesso venoso: 2 acessos calibrosos (18G ou maior)' },
+                    { type: 'med', value: 'ABCDE completo' },
+                    { type: 'med', value: 'Dieta zero; SF0,9% 500 mL EV aberto (4 etapas)' },
+                    { type: 'med', value: 'Noradrenalina 4mg/4mL - 16 mL + SG5% 234 mL EV BIC 10 mL/h, titular 2 mL/h cada 2-5 min se PAM<65' },
+                    { type: 'med', value: 'Dipirona 500mg/mL - 2 mL + 18 mL AD EV 6/6h SOS; Metoclopramida 10mg/2mL - 2 mL + 18 mL AD EV 8/8h SOS' },
+                    { type: 'med', value: 'Glicose 50% 40 mL EV se glicemia≤60; Insulina SC conforme HGT' },
+                    { type: 'med', value: 'O2 se SatO2<92%; glicemia 1/1h; débito urinário 1/1h; monitorização contínua' }
+                ],
+                notes: 'ECG em todos os graves admitidos na Sala Vermelha.'
+            },
+            {
+                id: 4, name: 'Agitação / Ansiedade / Surto Psicótico / Insônia', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Abordagem psiquiátrica. Haloperidol é a base.',
+                prescriptions: [
+                    { type: 'note', value: 'AGITAÇÃO INTENSA' },
+                    { type: 'med', value: 'Haloperidol 5mg IM; repetir a cada 5 min se necessário (máx 80 mg). Prometazina 1 amp IM' },
+                    { type: 'note', value: 'CRISE DE ANSIEDADE (DNV)' },
+                    { type: 'med', value: 'Diazepam 10mg VO' },
+                    { type: 'note', value: 'SURTO PSICÓTICO / MANIA' },
+                    { type: 'med', value: 'Haloperidol 5mg VO 1-4x/dia (máx 40 mg/dia) OU Clorpromazina 100mg VO 1-4x/dia (máx 600 mg/dia). Se sem VO: Haloperidol 5mg IM' },
+                    { type: 'note', value: 'SÍNDROME NEUROLÉPTICA' },
+                    { type: 'med', value: 'Bromocriptina 2,5mg 8/8h + Dantrolene 0,25-2 mg/kg IV 6/12h (máx 10 mg/kg/dia)' },
+                    { type: 'note', value: 'DEPRESSÃO/ANSIEDADE/TOC' },
+                    { type: 'med', value: 'Citalopram 20mg OU Venlafaxina 75mg LP OU Escitalopram 10mg' },
+                    { type: 'note', value: 'INSÔNIA' },
+                    { type: 'med', value: 'Zolpidem 10mg OU Flunitrazepam 0,3-1mg OU Ciclobenzaprina 10-20mg ao deitar. Máx 30 dias' }
+                ],
+                notes: ''
+            },
+            {
+                id: 5, name: 'Alcoolismo / Síndrome de Abstinência', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'SF + Complexo B. Glicose APÓS vitamina B (evitar Wernicke). Diazepam para abstinência.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero até segunda ordem; SF0,9% 500 mL + SG10% 500 mL + KCl 19,1% 10 mL EV 6/6h' },
+                    { type: 'med', value: 'Tiamina 100mg + SF0,9% 250 mL EV agora' },
+                    { type: 'med', value: 'Diazepam 10mg EV 4 min ACM + Diazepam 10mg 1cp VO 1/1h' },
+                    { type: 'med', value: 'Omeprazol 40mg EV 1x/dia; Metoclopramida 10mg EV 8/8h SOS; Dipirona 1g EV 6/6h SOS' },
+                    { type: 'med', value: 'Dextro 4/4h; Insulina SC conforme esquema; Glicose 50% 40 mL EV se glicemia<70' },
+                    { type: 'med', value: 'Repouso no leito; Monitorização cardíaca + PANI + Oximetria; Avaliação psiquiátrica antes da alta' }
+                ],
+                notes: ''
+            },
+            {
+                id: 6, name: 'Alergias / Urticárias / Picadas / Insolação / Queimaduras', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Alergias: anti-histamínico + corticoide. Queimaduras: Sulfadiazina de Prata + ATB.',
+                prescriptions: [
+                    { type: 'note', value: 'ALERGIAS / URTICÁRIAS / PICADAS - PS' },
+                    { type: 'med', value: 'Hidrocortisona 500mg EV bolus + Prometazina 1 amp IM; Adrenalina 0,5 amp IM se necessário' },
+                    { type: 'note', value: 'ALERGIAS - CASA' },
+                    { type: 'med', value: 'Loratadina 10mg 12/12h 10d; Hidroxizina 10mg 1cp 10d; Prednisona 20mg manhã 5d' },
+                    { type: 'note', value: 'INSOLAÇÃO' },
+                    { type: 'med', value: 'Cuidados gerais; Cânfora + Óxido de Zinco 3x/dia 5d; Dipirona 500mg 6/6h SOS; Diidroergotamina + Cafeína + Dipirona 1cp 8/8h SOS' },
+                    { type: 'note', value: 'QUEIMADURAS' },
+                    { type: 'med', value: 'Sulfadiazina de Prata tópica; Cefalexina 500mg 6/6h 10d; Dipirona 500mg 6/6h SOS' }
+                ],
+                notes: '1º grau epiderme; 2º grau derme; 3º grau hipoderme (indolor, esbranquiçada/carbonizada).'
+            },
+            {
+                id: 7, name: 'Amigdalite / Otites / Tosse / Soluço', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Amigdalite bacteriana: Penicilina Benzatina IM. OMA: amoxicilina. OE: tópico + ATB.',
+                prescriptions: [
+                    { type: 'note', value: 'AMIGDALITE - PS' },
+                    { type: 'med', value: 'Penicilina Benzatina 1.200.000 UI IM' },
+                    { type: 'note', value: 'AMIGDALITE - CASA' },
+                    { type: 'med', value: 'Amoxicilina 500mg 8/8h OU 875mg 12/12h 10d OU Azitromicina 500mg 1x/dia 5d' },
+                    { type: 'med', value: 'Ibuprofeno 300mg 8/8h 5d; Dipirona/Paracetamol 6/6h SOS; spray para garganta 4/4h 3d; pastilha analgésica 1 a cada hora (máx 10/dia)' },
+                    { type: 'note', value: 'OMA' },
+                    { type: 'med', value: 'Amoxicilina 500mg 8/8h 10d OU Amoxicilina + Clavulanato 8/8h 7-10d OU Azitromicina 500mg 1x/dia 3d OU Sulfametoxazol + Trimetoprima 12/12h 7-10d' },
+                    { type: 'med', value: 'Ibuprofeno 300mg 8/8h 3d' },
+                    { type: 'note', value: 'OTITE EXTERNA' },
+                    { type: 'med', value: 'Ciprofloxacino + Dexametasona (otológico) 3 gts 2x/dia 7d OU Betametasona + Clorfenesina 3 gts 3x/dia 7d + Amoxicilina 500mg 10d + calor local' },
+                    { type: 'note', value: 'TOSSE SECA' },
+                    { type: 'med', value: 'Dextrometorfano xarope 15 mL 12/12h (máx 10d) OU Antux (antitussígeno) 5 mL 8/8h 3-5d OU Bisoltussim 15 mL 8/8h 3d OU Levodropropizina 10 mL 3x/dia 5d' },
+                    { type: 'note', value: 'TOSSE SECRETIVA' },
+                    { type: 'med', value: 'Lavagem SF/NaCl 3%; Acetilcisteína 15 mL 1x/dia 5d OU envelope 200mg 8/8h 3d; Bromexina 10 mL 8/8h 3d' },
+                    { type: 'note', value: 'SOLUÇO - PS' },
+                    { type: 'med', value: 'Metoclopramida 1 amp IM OU Clorpromazina 5 gotas sublingual OU Prometazina 1 amp IM' }
+                ],
+                notes: ''
+            },
+            {
+                id: 8, name: 'Asma Exacerbada / Broncoespasmo / DPOC', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Asma: SatO2 93-95%. DPOC: 88-92%. Broncodilatador + corticoide. Magnésio se refratário.',
+                prescriptions: [
+                    { type: 'note', value: 'ASMA - PS' },
+                    { type: 'med', value: 'O2 cateter nasal para SatO2 >92% (>95% crianças)' },
+                    { type: 'med', value: 'Inalação (repetir 3x a cada 20 min): SF0,9% 5 mL + Ipratrópio 40 gts + Fenoterol 10 gts' },
+                    { type: 'med', value: 'Hidrocortisona 300 mg (3-5 mg/kg) + SF0,9% 100 mL EV OU Metilprednisolona 40mg EV agora e 6/6h' },
+                    { type: 'note', value: 'ASMA REFRATÁRIA' },
+                    { type: 'med', value: 'Terbutalina ½ amp SC - repetir 3x a cada 30 min' },
+                    { type: 'med', value: 'Sulfato de Magnésio 10% 20 mL + SF0,9% 100 mL EV rápido' },
+                    { type: 'med', value: 'Adrenalina 1 amp IM; IOT se necessário' },
+                    { type: 'note', value: 'DPOC - PS (satO2 alvo 88-92%)' },
+                    { type: 'med', value: 'O2 cateter 1-3 L/min; inalação como na asma; corticoide EV' },
+                    { type: 'note', value: 'ASMA CASA' },
+                    { type: 'med', value: 'Salbutamol 100 mcg 2-3 jatos 4/4h; Inalação SF 5 mL + Ipratrópio 20 gts + Fenoterol 6 gts 4/4h 5d' },
+                    { type: 'med', value: 'Prednisona 1-2 mg/kg/dia (40-60 mg) VO 7d' },
+                    { type: 'note', value: 'DPOC CASA' },
+                    { type: 'med', value: 'Amoxicilina + Clavulanato 500+125mg 8/8h 7d OU 875+125 12/12h; classe IV: Levofloxacino 500mg' },
+                    { type: 'med', value: 'Prednisona 20mg 1 cp VO cedo 5d; Inalação SF 5 mL + Ipratrópio 30 gts + Fenoterol 8 gts 6/6h 5d' }
+                ],
+                notes: ''
+            },
+            {
+                id: 9, name: 'AVC Hemorrágico (AVEH-IC) / HSA', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Jejum + monitorização + controle PA. Avaliação neurocirurgia. Escala Hunt-Hess para HSA.',
+                prescriptions: [
+                    { type: 'med', value: 'Jejum; SNG aberta; O2 cateter 3 L/min; monitor cardíaco; SVD; cabeceira 30°' },
+                    { type: 'med', value: 'SF0,9% 1000 mL 8/8h (se sem disfunção cardíaca); Dipirona 2 mL EV 6/6h se T>37,8' },
+                    { type: 'med', value: 'Fenitoína 100mg EV 8/8h; Metoclopramida 1 amp EV 8/8h' },
+                    { type: 'med', value: 'Dexametasona 4 mg EV 6/6h (controverso e curto período); Diazepam 10mg via SNG 8/8h' },
+                    { type: 'med', value: 'Nimodipina 30 mg via SNG 6/6h ou 4/4h (controverso, manter 4 semanas - HSA)' },
+                    { type: 'med', value: 'Captopril 50mg se PAS>220/PAD>120/PAM>130. OU Nitroprussiato 50mg + SG5% 250 mL EV BIC ACM' },
+                    { type: 'med', value: 'Se edema com efeito massa: Manitol 20% 100 mL EV bolus + 50-60 mL 4/4h' },
+                    { type: 'med', value: 'Dextro 6/6h; PA/T/FC; controle de diurese' }
+                ],
+                notes: 'HSA: repouso absoluto; Terapia dos 3H (Hidratação, Hemodiluição, Hipervolemia) SÓ após clipagem do aneurisma.'
+            },
+            {
+                id: 10, name: 'AVC Isquêmico (AVEI) - Agudo', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'ABC + Dextro + TC crânio (descartar hemorrágico). Se AVEI <4,5h: avaliar trombólise.',
+                prescriptions: [
+                    { type: 'med', value: 'ABC; Dextro para descartar hipoglicemia; TC de crânio; ECG, Rx tórax, labs' },
+                    { type: 'med', value: 'Antitérmicos de horário (DIPIRONA); Dextro 6/6h' },
+                    { type: 'med', value: 'Anti-hipertensivo (Captopril/Nitroprussiato): SÓ se PAS>220 ou PAD>120 ou PAM>130' },
+                    { type: 'note', value: 'AVCI NÃO EXTENSO / AIT' },
+                    { type: 'med', value: 'Jejum; decúbito 30°; SF0,9% 1000 mL 8/8h se sem disfunção cardíaca' },
+                    { type: 'med', value: 'Dipirona 2 mL EV 6/6h se T>37,8°; Fenitoína 100mg 1 amp EV 8/8h' },
+                    { type: 'med', value: 'AAS 200mg 1x/dia; Captopril 25mg se PAS>220/PAD>120/PAM>130' },
+                    { type: 'med', value: 'Fisioterapia motora; mudança decúbito 2/2h; PA/T/FC; investigar causa (ECG, ECO, USG carótidas)' },
+                    { type: 'note', value: 'AVCI EXTENSO' },
+                    { type: 'med', value: 'Jejum; SNG aberta; O2 cateter 3 L/min; SVD; SF0,9% 1000 mL 8/8h' },
+                    { type: 'med', value: 'AAS 200mg 1x/dia; Fenitoína 100mg 8/8h; Metoclopramida 1 amp 8/8h' },
+                    { type: 'med', value: 'Se edema com efeito massa: Manitol 20% 100 mL EV bolus (ataque) + 50-60 mL 4/4h (manutenção)' },
+                    { type: 'med', value: 'Enoxaparina profilático 20-40 mg SC 1x/dia (controverso)' }
+                ],
+                notes: 'Manitol por 24-72h, com redução progressiva de 10 mL/dia (evitar efeito rebote).'
+            },
+            {
+                id: 11, name: 'Bradiarritmia / Taquiarritmia / Cardioversão', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Instabilidade (5Ds): Dor torácica, Dispneia, Diminuição da consciência, Desmaio, Diminuição da PA.',
+                prescriptions: [
+                    { type: 'note', value: 'BRADIARRITMIA - PACIENTE INSTÁVEL' },
+                    { type: 'med', value: 'Dieta zero; Atropina 0,5 mg/mL - 2 mL EV bolus, repetir 3-5 min (Máx 3 mg)' },
+                    { type: 'med', value: 'Refratário: Fentanil 2 mL + SF0,9% 8 mL EV + Midazolam 0,5 mL + SF0,9% 9 mL EV, seguido de marca-passo transcutâneo (rate 70, modo fixo)' },
+                    { type: 'med', value: 'MP indisponível: Epinefrina 10 mL + SF0,9% 240 mL EV BIC 2 mL/h OU Dopamina 50mg/10mL - 50 mL + SG5% 200 mL EV BIC 10 mL/h' },
+                    { type: 'note', value: 'TAQUIARRITMIA - CARGAS CV' },
+                    { type: 'med', value: 'QRS estreito regular: 50-100 J. QRS estreito irregular: 120-200 J. QRS largo regular: 100 J. QRS largo irregular: 200 J (DESFIBRILAÇÃO)' },
+                    { type: 'med', value: 'Sedação: Midazolam 5mg/mL - 1 mL + 4 mL AD, 1 mL EV lento; Fentanil 50mcg/mL 1 mL EV lento' },
+                    { type: 'note', value: 'FARMACOTERAPIA' },
+                    { type: 'med', value: 'Adenosina 6 mg EV bolus + flush; se não reverter 12 mg após 2 min (máx 30 mg) - TSV' },
+                    { type: 'med', value: 'Amiodarona 150mg - 3 mL + SG5% 100 mL EV 10 min + manutenção 18 mL + SG5% 232 mL a 16 mL/h por 6h, seguido 8 mL/h por 18h' },
+                    { type: 'med', value: 'Metoprolol 5mg EV lento a cada 5 min (máx 15 mg). Manutenção VO 50 mg 2x/dia por 24h' },
+                    { type: 'med', value: 'Diltiazem 15-20 mg (0,25 mg/kg) IV 2 min - FA/Flutter. Repetir 20-25 mg após 15 min se necessário' },
+                    { type: 'med', value: 'Verapamil ataque 5 mg EV 2 min, repetir 10 mg após 5 min' }
+                ],
+                notes: 'TV polimórfica → DESFIBRILAÇÃO. Arritmias emboligênicas - controlar FC sem reverter.'
+            },
+            {
+                id: 12, name: 'Cefaleia / Vertigem / Labirintite', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'PS: analgesia EV / antivertiginoso. Casa: sintomáticos.',
+                prescriptions: [
+                    { type: 'note', value: 'CEFALEIA - PS' },
+                    { type: 'med', value: 'Dipirona 1 amp + Metoclopramida 1 amp + Dexametasona 4mg + SF0,9% 100 mL EV lento' },
+                    { type: 'med', value: 'OU Dipirona 1 amp + Tenoxicam 1 amp + Dexametasona 4mg + Dimenidrato + Piridoxina + SF 100 mL' },
+                    { type: 'med', value: 'OU Dimenidrato + Piridoxina DL 1 amp + Tramadol 100mg + SF 250 mL' },
+                    { type: 'med', value: 'OU Clorpromazina ½-1 amp + SF 100 mL EV 1h (acompanhar PA)' },
+                    { type: 'note', value: 'CEFALEIA - CASA' },
+                    { type: 'med', value: 'Tensional: Dipirona 500mg 6/6h SOS; Dimenidrato 40 gts 6/6h ou 100mg 6/6h' },
+                    { type: 'med', value: 'Enxaqueca: Dipirona + Isometepteno + Cafeína 2cp 6/6h; Diidroergotamina + Cafeína + Dipirona 1cp 8/8h; Diidroergotamina + Cafeína + Paracetamol + Metoclopramida 1cp 8/8h; Naratriptano 1cp 1x/dia 3d; Sumatriptano 25mg + repetir 2h' },
+                    { type: 'note', value: 'VERTIGEM / LABIRINTITE - PS' },
+                    { type: 'med', value: 'Dimenidrato + Piridoxina DL 1 amp + SF 100 mL EV lento OU Dimenidrato + Piridoxina 1 amp IM OU Dimenidrato 40 gts VO' },
+                    { type: 'med', value: 'Diazepam 5mg 1cp VO OU Clonazepam 10 gts VO' },
+                    { type: 'note', value: 'VERTIGEM - CASA' },
+                    { type: 'med', value: 'Dimenidrato 100mg 6/6h 3d (ou 40 gts); Ondansetrona 8mg 12/12h SOS' },
+                    { type: 'med', value: 'Betaistidina 8mg 8/8h 10d; Cinarizina 75mg ao deitar 30d OU Flunarizina 10mg ao deitar 30d' }
+                ],
+                notes: ''
+            },
+            {
+                id: 13, name: 'Cetoacidose Diabética (CAD) / Estado Hiperosmolar (EHH)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'HV em 3 fases. Checar K e Na corrigido. Insulinoterapia. Alvo glicemia 150-200 mg/dL.',
+                prescriptions: [
+                    { type: 'note', value: 'FASE 1 - 1ª hora' },
+                    { type: 'med', value: 'Dieta zero; SF0,9% 500 mL - 3 etapas (1500 mL) EV em 1h, depois 1 etapa por hora' },
+                    { type: 'note', value: 'FASE 2 - conforme K e Na corrigido' },
+                    { type: 'med', value: 'K 3,3-5,0 + Na<135: Insulinoterapia + SF0,9% 1000 mL + KCl 19,1% 10 mL EV 1h' },
+                    { type: 'med', value: 'K 3,3-5,0 + Na≥135: Insulinoterapia + NaCl 0,45% 1000 mL + KCl 19,1% 10 mL EV 2h' },
+                    { type: 'med', value: 'K>5,0 + Na<135: Insulinoterapia + SF0,9% 1000 mL EV 2h' },
+                    { type: 'med', value: 'K>5,0 + Na≥135: Insulinoterapia + NaCl 0,45% 1000 mL EV 2h' },
+                    { type: 'note', value: 'FASE 3 - Insulinoterapia' },
+                    { type: 'med', value: 'Insulina Regular 100 UI em SF0,9% 99 mL - EV BIC 0,1 UI/kg/h (pct 70kg = 7 mL/h)' },
+                    { type: 'med', value: 'Glicemia 1/1h. Alvo: reduzir HGT 50-75 mg/dL/h. Se >75: reduzir metade. Se <50: dobrar' },
+                    { type: 'med', value: 'Se HGT<200-250: SF/NaCl + SG5% 250 mL/h' },
+                    { type: 'note', value: 'RESOLUÇÃO - Glicemia<200 + 2 de 3: pH≥7,3 / HCO3≥15 / Ânion GAP≤12' },
+                    { type: 'med', value: 'Transição: Dieta VO; Insulina Regular 10 UI SC; interromper bomba após 2h' }
+                ],
+                notes: 'Na corrigido = Na medido + 0,016*(Glicose-100). Não deixar glicemia cair >200 mg/dL.'
+            },
+            {
+                id: 14, name: 'Conjuntivite / Trauma Ocular / Hordéolo', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Conjuntivite viral/bacteriana. Trauma ocular = oftalmo imediato.',
+                prescriptions: [
+                    { type: 'note', value: 'CONJUNTIVITE VIRAL' },
+                    { type: 'med', value: 'Lubrificante ocular 1 gota 4x/dia 5d (crianças: Systane/Fresh Tears/Artelac); lavagem SF; compressa gelada' },
+                    { type: 'med', value: 'Se não melhorar em 4d - OFTALMO. Lavar mãos/rosto, não coçar, toalha individual' },
+                    { type: 'note', value: 'CONJUNTIVITE BACTERIANA' },
+                    { type: 'med', value: 'Idem viral + Colírio Ofloxacino 6/6h até 10d OU Ciprofloxacino 6/6h 5d OU Tobramicina 4/4h 7d' },
+                    { type: 'note', value: 'HORDÉOLO (TERSOL)' },
+                    { type: 'med', value: 'Compressas água morna 3/3h 15 min até desaparecer' },
+                    { type: 'note', value: 'TRAUMA OCULAR' },
+                    { type: 'med', value: 'Lavagem SF0,9%; Anestésico 2 gts 4/4h 3d; Tobramicina 2 gts 6x/dia 5d' },
+                    { type: 'med', value: 'Epitesam (regenerador) 3x/dia 5d; Tampão ocular; encaminhar oftalmo' },
+                    { type: 'med', value: 'Paracetamol + Codeína 500+30 4/4h 3d (receita controlada)' }
+                ],
+                notes: ''
+            },
+            {
+                id: 15, name: 'Crise Convulsiva / Estado de Mal Epiléptico', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'BZD EV. Após BZD: Hidantalização (Fenitoína). Tratar apenas EM >5 min ou repetidas sem recuperação.',
+                prescriptions: [
+                    { type: 'med', value: 'Verificar vias aéreas; Dextro' },
+                    { type: 'med', value: 'Diazepam 10mg/2mL - 2 mL EV lento 2 min (ou retal). Repetir 2x 5-10 min (máx 30 mg)' },
+                    { type: 'med', value: 'OU Midazolam 5mg/mL - 2 mL IM/intranasal (não repetir)' },
+                    { type: 'note', value: 'HIDANTALIZAÇÃO (após BZD)' },
+                    { type: 'med', value: 'Fenitoína 50mg/mL - 20 mg/kg (0,4 mL x peso kg). Diluir em SF0,9% 250 mL. Velocidade 25-50 mg/min (idoso 25)' },
+                    { type: 'med', value: 'Tabela 70kg: 1400mg (28 mL) em 297 mL/h (25 mg/min) ou 595 mL/h (50 mg/min)' },
+                    { type: 'note', value: 'EM REFRATÁRIO' },
+                    { type: 'med', value: 'Fenobarbital 20 mg/kg EV 100 mg/min; Midazolam 0,2 mg/kg EV bolus; IOT + VM; Tiopental 5 mg/kg' }
+                ],
+                notes: 'NUNCA administrar fenitoína na mesma via do BZD ou soro com glicose. AVP exclusivo com filtro.'
+            },
+            {
+                id: 16, name: 'Crise Tireotóxica', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Escore de Burch-Wartofsky. ≥45 = crise tireotóxica. Mortalidade 30%. Internação em UTI.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero; SNG se necessário' },
+                    { type: 'med', value: 'Propiltiouracil 300 mg via SNG 6/6h' },
+                    { type: 'med', value: 'Propranolol 80 mg via SNG 6/6h (alvo FC 60-80). Alternativa: Verapamil ou Diltiazem' },
+                    { type: 'med', value: 'Hidrocortisona 100 mg EV 8/8h' },
+                    { type: 'med', value: 'Solução de Lugol 10 gotas SNG 8/8h (1h após PTU)' },
+                    { type: 'med', value: 'SF0,9% 500 mL EV ACM; Dipirona 1 amp 6/6h SOS; Metoclopramida 1 amp 6/6h SOS' },
+                    { type: 'med', value: 'Monitorização cardíaca; Tax e glicemia 4/4h' }
+                ],
+                notes: 'Tratar infecção (fator precipitante). Antipiréticos + resfriamento.'
+            },
+            {
+                id: 17, name: 'Dengue / Leptospirose / Mononucleose', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Dengue: grupos A/B/C/D. Leptospirose: sufusão conjuntival + dor panturrilha.',
+                prescriptions: [
+                    { type: 'note', value: 'DENGUE GRUPO A (sem alterações)' },
+                    { type: 'med', value: 'Hidratação domiciliar 80 mL/kg/dia; Dipirona/Paracetamol SOS' },
+                    { type: 'note', value: 'GRUPO B (sgtp pele, comorbidade, prova laço +)' },
+                    { type: 'med', value: 'Observação + Ht: normal → A; ↑Ht>10% → hidratação supervisionada' },
+                    { type: 'note', value: 'GRUPO C (SINAIS DE ALARME)' },
+                    { type: 'med', value: 'Internação com hidratação EV 20 mL/kg/h' },
+                    { type: 'note', value: 'GRUPO D (CHOQUE)' },
+                    { type: 'med', value: 'UTI; hidratação EV 20 mL/kg/20 min (3x) e reavaliar 30 min; repetir Ht após 2h' },
+                    { type: 'note', value: 'PROVA DO LAÇO' },
+                    { type: 'med', value: 'Quadrado 2,5 cm; manguito 100 mmHg por 5 min (>20 petéquias = +)' },
+                    { type: 'note', value: 'LEPTOSPIROSE' },
+                    { type: 'med', value: 'Leve: Doxiciclina 100mg VO 12/12h OU Amoxicilina 500mg 8/8h' },
+                    { type: 'med', value: 'Grave: Penicilina G 1,5 milhão UI EV 6/6h + suporte/diálise' },
+                    { type: 'note', value: 'MONONUCLEOSE' },
+                    { type: 'med', value: 'Suporte + Dexametasona 4 mg' }
+                ],
+                notes: 'Leptospirose: mialgia, sufusão conjuntival, dor panturrilha, ↓plaquetas, ↑CPK, IRA com ↓K.'
+            },
+            {
+                id: 18, name: 'Dermatologia (Pitiríase / Onicomicose / Tinea / Balanopostite / Pediculose / Escabiose)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Antifúngicos tópicos/sistêmicos. Escabiose: Ivermectina + Permetrina.',
+                prescriptions: [
+                    { type: 'note', value: 'PITIRÍASE VERSICOLOR' },
+                    { type: 'med', value: 'Itraconazol 200mg 1x/dia 5d; Icadenspray/creme 2x/dia; Isoconazol creme; remoção mecânica com bucha' },
+                    { type: 'note', value: 'ONICOMICOSE' },
+                    { type: 'med', value: 'Amorolfina 2x/sem 6-9 meses OU Tioconazol 2x/dia 6-12 meses OU Ciclopirox + Itraconazol 100mg 2cp/dia 3 meses OU Fluconazol 150mg/sem 6 meses' },
+                    { type: 'note', value: 'TINEA PEDIS/CRURAL/CORPORIS' },
+                    { type: 'med', value: 'Cetoconazol creme 2x/dia 14d OU Betametasona + Cetoconazol 2x/dia 14d. Disseminado: Cetoconazol 200mg 4 sem OU Fluconazol 150mg/sem 4 sem' },
+                    { type: 'note', value: 'BALANOPOSTITE' },
+                    { type: 'med', value: 'Nistatina creme 1x/dia 7d; Fluconazol 150mg dose única; higiene local' },
+                    { type: 'note', value: 'PEDICULOSE' },
+                    { type: 'med', value: 'Deltametrina shampoo 1x/dia 4d + repetir após 1 sem OU Permetrina 10 min + pente fino 2d + repetir após 1 sem' },
+                    { type: 'note', value: 'ESCABIOSE' },
+                    { type: 'med', value: 'Ivermectina 6mg dose única (ajustar por peso) + repetir 1 sem; Dexclorfeniramina 2mg 8/8h 5d OU Hidroxizina 25mg à noite 5d' },
+                    { type: 'med', value: 'Permetrina 5% 3-5 noites + repetir 1 sem OU Deltametrina 1x/dia 10d' }
+                ],
+                notes: 'Fórmula manipulada: Enxofre 10% + Hidrocortisona 2% + Lactato amônia 10% + Alantoína 2% + Creme QSP 150 mL, 10 noites.'
+            },
+            {
+                id: 19, name: 'Diarreia / GECA / Constipação', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Avaliar desidratação. SRO. ATB se disenteria.',
+                prescriptions: [
+                    { type: 'note', value: 'DIARREIA - PS' },
+                    { type: 'med', value: 'Escopolamina + Dipirona 1 amp + Metoclopramida 1 amp EV + SF0,9% 100 mL (soro 500 só se desidratação)' },
+                    { type: 'note', value: 'DIARREIA - CASA' },
+                    { type: 'med', value: 'Saccharomyces boulardii 200mg 1cp 12/12h 5d; Escopolamina + Dipirona 40 gts 8/8h se cólica' },
+                    { type: 'med', value: 'SRO - 1 env em 1L água; 1/2 copo 1/1h. Caseiro: 1L água, 2 colheres açúcar, 1 café sal' },
+                    { type: 'med', value: 'Se febre/sangue/muco: Sulfametoxazol + Trimetoprima 800+160 12/12h 5d OU Ciprofloxacino 500mg 12/12h 7d' },
+                    { type: 'note', value: 'CONSTIPAÇÃO - PS' },
+                    { type: 'med', value: 'Enteroclisma: glister glicerinado 500 mL 6/6h ou 1000 mL 8/8h via retal' },
+                    { type: 'note', value: 'CONSTIPAÇÃO - CASA' },
+                    { type: 'med', value: 'Óleo mineral 1 colher 2x/dia 30d; Lactulose 10-40 mL até 3x/dia; Dioctil sulfossuccinato + Bisacodil 1-2 cp ao deitar; Bisacodil 2cp ao deitar' }
+                ],
+                notes: ''
+            },
+            {
+                id: 20, name: 'Dispepsia / Gastrite / DRGE / Vômitos', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'PS: Escopolamina + Dipirona + Dimenidrato + Piridoxina + Ranitidina. Casa: IBP + pró-cinético.',
+                prescriptions: [
+                    { type: 'note', value: 'DISPEPSIA/GASTRITE/DRGE - PS' },
+                    { type: 'med', value: 'Escopolamina + Dipirona 1 amp + Dimenidrato + Piridoxina DL 1 amp + Ranitidina 1 amp + SF0,9% 100-250 mL EV' },
+                    { type: 'med', value: 'Se necessário: Hidróxido de Alumínio 10 mL VO' },
+                    { type: 'note', value: 'DISPEPSIA - CASA' },
+                    { type: 'med', value: 'Omeprazol 20mg 1cp jejum 30d OU Lansoprazol 40mg OU Pantoprazol 40mg OU Ranitidina 150mg 12/12h' },
+                    { type: 'med', value: 'Hidróxido de Alumínio 5 mL 8/8h 30d; Escopolamina + Dipirona 40 gts 8/8h' },
+                    { type: 'note', value: 'DRGE - CASA' },
+                    { type: 'med', value: 'IBP jejum 30d (Omeprazol/Lansoprazol/Pantoprazol/Ranitidina)' },
+                    { type: 'med', value: 'Domperidona 10mg 8/8h antes refeições 30d (NÃO em uso cetoconazol) OU Bromoprida 10mg 8/8h' },
+                    { type: 'note', value: 'VÔMITOS - PS' },
+                    { type: 'med', value: 'Dimenidrato + Piridoxina DL 1 amp EV/IM OU Ondansetrona 4mg + AD 8 mL EV lento OU Metoclopramida 1 amp EV (evitar jovens)' },
+                    { type: 'note', value: 'VÔMITOS - CASA' },
+                    { type: 'med', value: 'Dimenidrato 100mg 6/6h 3d OU Ondansetrona 8mg 12/12h 5d OU Metoclopramida 10mg 8/8h OU Domperidona 10mg 8/8h' }
+                ],
+                notes: ''
+            },
+            {
+                id: 21, name: 'Distúrbios do Cálcio (Hiper e Hipocalcemia)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Sintomático e/ou Ca iônico>7 / total>14 = emergência. Ca corrigido = Ca + [(4,0-albumina) x 0,8].',
+                prescriptions: [
+                    { type: 'note', value: 'HIPERCALCEMIA (>12 sintomática / >14 assintomática)' },
+                    { type: 'med', value: 'Hidratação SF0,9% 300 mL/h para diurese 100-150 mL/h. Furosemida 20-40 mg 6/6h pode ajudar' },
+                    { type: 'med', value: 'Pamidronato dose única (não repetir <7 dias): <12mg: 30mg; 12-13,5mg: 60mg; >13,5mg: 90mg - diluir em SF, 2-4h' },
+                    { type: 'med', value: 'OU Ácido Zoledrônico 4 mg EV 15 min repetível em 7 dias' },
+                    { type: 'note', value: 'HIPOCALCEMIA SINTOMÁTICA' },
+                    { type: 'med', value: 'Gluconato de Cálcio 10% - 1-2g (11-22 mL) em 100 mL SF EV 10-20 min' },
+                    { type: 'med', value: 'Manutenção: 0,5-1,5 mg/kg Ca elementar por hora' },
+                    { type: 'med', value: 'VO crônico: Carbonato de Cálcio 500mg 8/8h + Calcitriol 0,25mg 12/12h' }
+                ],
+                notes: '1 mL Gluconato de Cálcio 10% = 9 mg Ca elementar.'
+            },
+            {
+                id: 22, name: 'Distúrbios do Potássio (Hiper e Hipocalemia)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'HiperK: leve 5,0-6,0; grave ≥6,5. HipoK: leve 3,5-2,5 (VO); grave ≤2,5 (EV).',
+                prescriptions: [
+                    { type: 'note', value: 'HIPERK GRAVE ([K+]≥6,5) - IMEDIATO' },
+                    { type: 'med', value: 'Gluconato de Cálcio 10% - 10 mL EV em 5-10 min (digitálico: 30 min)' },
+                    { type: 'med', value: 'Insulina Regular 10 UI + Glicose 10% 500 mL EV 30 min (ou 10 UI EV bolus se HGT≥250)' },
+                    { type: 'med', value: 'Furosemida 4 mL EV 12/12h; Glicemia 15 min 1ª hora, depois 1/1h por 6h' },
+                    { type: 'note', value: 'HIPERK 5,5-6,5 - Redução rápida' },
+                    { type: 'med', value: 'Poliestireno sulfonato de cálcio 30g em 50 mL água VO 4/4h OU Ciclosilicato de zircônio sódico 10g em 45 mL VO 8/8h' },
+                    { type: 'med', value: 'Bicarbonato de Sódio 8,4% 150 mL + SG5% 1000 mL EV 2-4h (se acidose); Salbutamol 40-80 gts + SF 5 mL inalatória 10 min' },
+                    { type: 'note', value: 'HIPOCALEMIA LEVE (VO)' },
+                    { type: 'med', value: 'Cloreto de Potássio xarope 6% - 15-30 mL VO (15 mL = 12 mEq) OU KCl 600mg 2cp 6/6h. Máx 40 mEq/dose' },
+                    { type: 'note', value: 'HIPOCALEMIA GRAVE - AVP' },
+                    { type: 'med', value: 'KCl 19,1% - 15 mL + SF0,9% 485 mL EV BIC 125 mL/h (80 mEq/L, 10 mEq/h)' },
+                    { type: 'note', value: 'HIPOCALEMIA GRAVE - CVC' },
+                    { type: 'med', value: 'KCl 19,1% - 20 mL + SF0,9% 480 mL EV BIC 190 mL/h (100-120 mEq/L, 20 mEq/h)' }
+                ],
+                notes: 'Preparo em SF (nunca glicose). AVP máx 80; CVC máx 120 mEq/L. Déficit K = 0,4 x Peso x (K desejado - K encontrado).'
+            },
+            {
+                id: 23, name: 'Distúrbios do Sódio (Hiper e Hiponatremia)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Corrigir lentamente. Nunca ultrapassar 24 mEq/dia (risco edema cerebral).',
+                prescriptions: [
+                    { type: 'note', value: 'HIPONATREMIA' },
+                    { type: 'med', value: 'Déficit: (140 - Na) x Peso x 0,6. Velocidade 0,5-1 mEq/h' },
+                    { type: 'med', value: 'Ex: Pct 70kg, Na 118 → 924 mEq → Soro Fisiológico 3% 1000 mL (500 mEq) EV em 24h + repetir Na' },
+                    { type: 'med', value: 'Sintomática (coma/convulsão): Soro Fisiológico 3% 100 mL EV 10 min, repetir 2x se necessário' },
+                    { type: 'med', value: 'Crônica grave (Na<120): Soro Fisiológico 3% EV 15-30 mL/h. Dosar Na 4/4h. Alvo 4-6 mEq 24h. Interromper quando Na>125' },
+                    { type: 'note', value: 'HIPERNATREMIA (corrigir se Na>160)' },
+                    { type: 'med', value: 'Déficit água = [(140 - Na) x 0,6 x Peso] + 140. Usar SG5% ou Soro ao Meio. Repor metade em 24h' },
+                    { type: 'med', value: 'Se desidratado: SF0,9% 250 mL EV cada 30 min até euvolemia; se hipervolêmico: Furosemida 4 mL EV 8/8h' }
+                ],
+                notes: 'Soro 3%: NaCl 20% 110 mL + SF0,9% 890 mL. Soro ao meio: SF 500 mL + SG5% 500 mL.'
+            },
+            {
+                id: 24, name: 'Dor Aguda / Edema MMII / Varizes', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Dor aguda: analgesia. Edema: descartar TVP.',
+                prescriptions: [
+                    { type: 'note', value: 'DOR AGUDA - CASA' },
+                    { type: 'med', value: 'Dipirona 500mg 6/6h; Dipirona + Prometazina + Adifenina 1cp 6/6h; Paracetamol 500mg 6/6h; Paracetamol + Codeína 30mg 6/6h (receita controlada)' },
+                    { type: 'note', value: 'EDEMA MMII - PS' },
+                    { type: 'med', value: 'Descartar TVP; Furosemida 40mg VO OU 1 amp EV' },
+                    { type: 'note', value: 'EDEMA - CASA' },
+                    { type: 'med', value: 'Furosemida 40mg 1cp manhã até desaparecer OU Hidroclorotiazida 50mg manhã' },
+                    { type: 'note', value: 'VARIZES - PS' },
+                    { type: 'med', value: 'Diclofenaco 1 amp + Dipirona 1 amp se dor forte' },
+                    { type: 'note', value: 'VARIZES - CASA' },
+                    { type: 'med', value: 'Meia elástica média compressão; Venalot (cumarina + troxerrutina) 1cp 8/8h; Capilarema (diosmina + hesperidina) 75mg 12/12h' }
+                ],
+                notes: ''
+            },
+            {
+                id: 25, name: 'Drogas Vasoativas - Guia Rápido', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Consultar tabelas de dose por peso.',
+                prescriptions: [
+                    { type: 'med', value: 'Noradrenalina 4mg/4mL - 16 mL + SG5% 234 mL (64 mcg/mL). Dose 0,02-2 mcg/kg/min. Dica: 1 mL/h ≈ 1 mcg/min' },
+                    { type: 'med', value: 'Dobutamina 12,5mg/mL - 80 mL + SF0,9% 170 mL (4 mg/mL). Dose 2-20 mcg/kg/min, titular 2 mL/h cada 10 min' },
+                    { type: 'med', value: 'Nitroglicerina 5mg/mL - 10 mL + SG5% 240 mL (200 mcg/mL). Dose 0,5-10 mcg/kg/min, titular 3 mL/h cada 5 min' },
+                    { type: 'med', value: 'Nitroprussiato de Sódio 50mg/2mL - 2 mL + SG5% 248 mL (200 mcg/mL). Dose 0,5-10 mcg/kg/min, titular 2 mL/h cada 3-5 min' },
+                    { type: 'med', value: 'Vasopressina 20 U/mL - 1 mL + SF0,9% 100 mL (0,2 U/mL). Dose 0,03 U/min = 9 mL/h (faixa 0,01-0,04 = 3-12 mL/h)' },
+                    { type: 'med', value: 'Epinefrina 1mg/mL - 10 mL + SF0,9% 240 mL (40 mcg/mL). Dose 2-15 mL/h' },
+                    { type: 'med', value: 'Dopamina - 5 ampolas 50mg em 200 mL SF = 1 mg/mL. Dose 2,5-20 mcg/kg/min. Fórmula: peso x dose x 0,06 = mL/h' }
+                ],
+                notes: ''
+            },
+            {
+                id: 26, name: 'Emergências Hipertensivas', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Reduzir PAM 10-20% na 1ª hora e 5-15% nas 23h seguintes.',
+                prescriptions: [
+                    { type: 'note', value: 'URGÊNCIA (PA>160x90 sem LOA)' },
+                    { type: 'med', value: 'Captopril 25-50 mg 1 a 4 cp VO - início 15 min, duração 4-6h' },
+                    { type: 'med', value: 'Nifedipina 10-20 mg VO - início 5-15 min, duração 3-5h' },
+                    { type: 'note', value: 'EMERGÊNCIA (PA>140x90 com LOA)' },
+                    { type: 'med', value: 'Pedir HMG, Cr, Ur, Na, K, Urina 1, ECG, Rx tórax' },
+                    { type: 'med', value: 'Nitroprussiato de Sódio 50mg/2mL - 1 amp em 240 mL SG5%, BIC 3 mL/h, aferir PA 2/2 min, aumentar 2 mL/h até PA desejada' },
+                    { type: 'med', value: 'Nitroglicerina 5mg/mL - 10 mL + SG5% 240 mL EV BIC 3 mL/h, incrementar 3 mL/h cada 5 min (máx 60)' },
+                    { type: 'med', value: 'Propranolol ou Metoprolol - repetir 3x em bolus para FC desejada' },
+                    { type: 'med', value: 'Esmolol 2500mg/10mL - 10 mL + SF0,9% 240 mL: 5 mL EV 1 min (ataque), BIC 20 mL/h (dissecção - FC<60)' }
+                ],
+                notes: 'Após 6h, iniciar medicação oral e diminuir gradativamente o EV.'
+            },
+            {
+                id: 27, name: 'Erisipela / Impetigo / Furunculose / Flebite', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Erisipela: S. pyogenes. Impetigo/Furunculose: S. aureus.',
+                prescriptions: [
+                    { type: 'note', value: 'ERISIPELA - GRAVES' },
+                    { type: 'med', value: 'Penicilina G Cristalina 2.000.000 U 4/4h EV 10-14d OU Ceftriaxona 1g 1x/dia 10-14d OU Cefazolina 1-2g 8/8h' },
+                    { type: 'note', value: 'ERISIPELA - LEVES' },
+                    { type: 'med', value: 'Penicilina G Procaina 600.000 U 12/12h EV 10-14d OU Penicilina V oral 500mg 6/6h. Alérgicos: Eritromicina 500mg 6/6h' },
+                    { type: 'note', value: 'CELULITE/CISTO - GRAVES' },
+                    { type: 'med', value: 'Oxacilina 2g EV 4/4h 10-14d OU Cefazolina 1g 8/8h OU Nafcilina 1-2g 6/6h' },
+                    { type: 'note', value: 'CELULITE - LEVES' },
+                    { type: 'med', value: 'Cefalexina 500mg 6/6h 7d OU Clindamicina 300mg 1cp 6/6h 10-14d' },
+                    { type: 'note', value: 'FLEBITE' },
+                    { type: 'med', value: 'Dipirona 500mg 8/8h SOS; Diclofenaco 50mg 8/8h 3d OU Ibuprofeno 600mg 8/8h 3d OU Nimesulida 100mg 12/12h 3d' },
+                    { type: 'note', value: 'IMPETIGO' },
+                    { type: 'med', value: 'Cuidados locais; Cefalexina 500mg 6/6h 10d OU Amoxicilina + Clavulanato 875+125 12/12h 7-10d' },
+                    { type: 'note', value: 'FURUNCULOSE' },
+                    { type: 'med', value: 'Compressas mornas + drenagem; Cefalexina 500mg 6/6h 7d OU Sulfametoxazol + Trimetoprima 12/12h 5-10d; Neomicina tópico 4x/dia' }
+                ],
+                notes: ''
+            },
+            {
+                id: 28, name: 'Fibrilação Atrial (com/sem Instabilidade)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Com instabilidade: CVE. Sem instabilidade <48h: CV química. >48h: controle FC + anticoagulação.',
+                prescriptions: [
+                    { type: 'note', value: 'FA COM INSTABILIDADE - CVE' },
+                    { type: 'med', value: 'Midazolam 5mg/mL 1 mL + 4 mL AD + Fentanil 50mcg/mL 1 mL EV lento' },
+                    { type: 'med', value: 'CVE SINCRONIZADA: Monofásico 200-300-360 J; Bifásico 200 J' },
+                    { type: 'med', value: 'Após CV: Anticoagular ≥30 dias - Rivaroxabana 20mg 1x/dia OU Apixabana 5mg 12/12h OU Edoxabana 60mg OU Dabigatrana 75mg 12/12h OU Varfarina 5mg (INR 2-3)' },
+                    { type: 'note', value: 'FA < 48h - CV QUÍMICA' },
+                    { type: 'med', value: 'Amiodarona 150mg/3mL - 3 mL + SG5% 100 mL EV 10 min + manutenção 18 mL + SG5% 232 mL a 16 mL/h 6h + 8 mL/h 18h' },
+                    { type: 'note', value: 'FA > 48h - CONTROLE FC' },
+                    { type: 'med', value: 'Metoprolol 1mg/mL - 2,5-5 mL EV bolus, repetir 5-10 min (máx 15 mg). VO: Succinato de Metoprolol 50mg 1x/dia OU Carvedilol 3,125mg 12/12h OU Atenolol 25mg 1x/dia OU Bisoprolol 2,5mg 1x/dia OU Diltiazem 30mg 8/8h' },
+                    { type: 'med', value: 'Anticoagulação (escolher 1): Rivaroxabana 20mg 1x/dia OU Apixabana 5mg 12/12h OU Edoxabana 60mg OU Dabigatrana 75mg 12/12h OU Varfarina 5mg (INR 2-3)' }
+                ],
+                notes: 'Anticoagular sempre se: estenose mitral mod/grave, CMH, prótese mecânica, miocárdio não compactado, amiloidose.'
+            },
+            {
+                id: 29, name: 'Gota', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'PS: AINE + Colchicina. Crise aguda.',
+                prescriptions: [
+                    { type: 'med', value: 'Diclofenaco 1 amp + Tramadol 2 mL IM; Indometacina 25mg 2-3x' },
+                    { type: 'med', value: 'Dipirona 40 gts VO OU Dipirona + Prometazina + Adifenina 1 amp IM' },
+                    { type: 'med', value: 'Se não melhorar: Colchicina 0,5mg - 3cp VO 1ª dose + 1cp a cada 2h até melhora/diarreia (máx 16 cp). Corticoide' },
+                    { type: 'note', value: 'CASA' },
+                    { type: 'med', value: 'Colchicina 0,5mg 1cp 12/12h 3d; Dipirona 500mg 6/6h SOS' }
+                ],
+                notes: ''
+            },
+            {
+                id: 30, name: 'Hipoglicemia', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'BEG: 3 ampolas glicose 50% EV 15/15 min. REG/MEG: 4 ampolas.',
+                prescriptions: [
+                    { type: 'note', value: 'LEVE (Dx<70) - VO' },
+                    { type: 'med', value: '15 g carboidrato: 1 colher açúcar/mel OU 150 mL refrigerante OU 150 mL suco OU 3 balas' },
+                    { type: 'note', value: 'GRAVE (Dx<54) ou sem deglutição - EV/IM' },
+                    { type: 'med', value: 'Glicose 50% 3 ampolas EV 15/15 min (BEG) ou 4 amp (REG/MEG)' },
+                    { type: 'med', value: 'OU Glucagon 1mg IM se sem acesso' },
+                    { type: 'med', value: 'Após reversão: lanche' }
+                ],
+                notes: ''
+            },
+            {
+                id: 31, name: 'Hipertensão Arterial Sistêmica - Tratamento Crônico', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Consulta: solicitar Urina1, K, Na, glicemia, Colest total/frações, ácido úrico, ECG, TG.',
+                prescriptions: [
+                    { type: 'med', value: 'Tiazídico: Hidroclorotiazida 25mg 1x/dia (não em gota/hiperparatireoidismo)' },
+                    { type: 'med', value: 'Betabloqueador: Propranolol 40mg 1x/dia OU Atenolol 100mg 1x/dia (não em DPOC/asma, claudicação, IC descompensada, BAV 2-3)' },
+                    { type: 'med', value: 'IECA: Captopril 25mg 12/12h (máx 50mg 8/8h) OU Enalapril 5mg 1x/dia (máx 40mg). NÃO em estenose renal, rim único, tosse/broncoespasmo, gravidez, K>5,5' },
+                    { type: 'med', value: 'BRA: Losartana 25mg 12/12h (máx 50mg 12/12h). Mesmas contras IECA' },
+                    { type: 'med', value: 'Anlodipino 5mg 12/12h (10mg 12/12h). NÃO em IAM/AVE/angina/insuficiência' }
+                ],
+                notes: ''
+            },
+            {
+                id: 32, name: 'IAM com Supra de ST (IAMCSST)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'ABC + MOV + AAS 300mg macerado + ECG em 10 min. Angioplastia primária (até 90 min) ou trombólise (até 30 min).',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero; AAS 100mg - 3 cp VO mastigar/engolir (300 mg); Clopidogrel 75mg - 8 cp VO (600 mg)' },
+                    { type: 'med', value: 'Morfina 10mg/mL - 1 mL + 9 mL SF: 2-4 mg EV bolus 5/5 min se dor refratária (máx 25 mg)' },
+                    { type: 'med', value: 'Nitroglicerina IV 5-10 mcg/min BIC. CUIDADO: NÃO se Viagra/IAM de VD' },
+                    { type: 'med', value: 'Betabloqueador VO (NÃO em IAM parede inferior/choque): Metoprolol 25-100 mg 12/12h OU Atenolol 25-200 mg 1x/dia' },
+                    { type: 'med', value: 'Rosuvastatina 40mg 1cp 1x/dia; Enalapril 5-10 mg VO; Sinvastatina 40 mg à noite' },
+                    { type: 'note', value: 'TROMBÓLISE (se angioplastia indisponível)' },
+                    { type: 'med', value: 'Tenecteplase 5mg/mL EV bolus: <60kg 30mg; 60-69 35mg; 70-79 40mg; 80-89 45mg; ≥90 50mg. >75 anos: 50%' },
+                    { type: 'med', value: 'OU Alteplase: bolus 15 mg + 0,75 mg/kg (máx 50 mg) 30 min + 0,5 mg/kg (máx 35 mg) 60 min. Total ≤100 mg' },
+                    { type: 'med', value: 'OU Estreptoquinase 1.500.000 U infundir 30-60 min' },
+                    { type: 'med', value: 'Enoxaparina 30 mg EV bolus + 1 mg/kg SC 12/12h. ≥75 anos: sem bolus, 0,75 mg/kg 12/12h' }
+                ],
+                notes: 'Contraindicações trombólise: AVCH, TCE, sangramento ativo, gravidez, RCP prolongada.'
+            },
+            {
+                id: 33, name: 'IAM sem Supra de ST (IAMSSST) / Angina Instável', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'MONABC + estratificar risco. Enzimas normais + ECG sem supra = Angina Instável.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta oral branda (zero se CATE <12h); AAS 100mg - 3 cp (300 mg)' },
+                    { type: 'med', value: 'Clopidogrel 75mg - 4 cp VO (300 mg). NÃO administrar se CATE <24h' },
+                    { type: 'med', value: 'Enoxaparina 1 mg/kg SC 12/12h (≥75 anos 0,75 mg/kg; TFG≤30: 1 mg/kg 1x/dia)' },
+                    { type: 'med', value: 'Nitroglicerina 5mg/mL - 10 mL + SG5% 240 mL EV BIC 3 mL/h, incrementar 3 mL/h cada 5 min (máx 45)' },
+                    { type: 'med', value: 'Morfina 2-4 mg EV bolus 5/5 min se dor refratária' },
+                    { type: 'med', value: 'Atenolol 25mg 1cp 12/12h; Enalapril 10mg 1cp 12/12h; Rosuvastatina 40mg 1x/dia' },
+                    { type: 'med', value: 'Considerar CATE precoce <24h se alto risco (elevação troponina, alteração ST dinâmica)' }
+                ],
+                notes: 'Enzimas normais + ECG sem supra = Angina Instável → sintomáticos + cardiologista.'
+            },
+            {
+                id: 34, name: 'Insuficiência Adrenal Aguda', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Ressuscitação volêmica + corticoterapia + tratar causa precipitante.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero; SF0,9% 1000 mL EV em 1h (1-3L primeiras 12-24h; manter 30-40 mL/kg 24h)' },
+                    { type: 'med', value: 'Hidrocortisona 100mg/fr - 1 fr em 2 mL AD + SF0,9% 20 mL EV 2 min IMEDIATAMENTE. Manutenção 50 mg EV 6/6h 24h, depois 50 mg 12/12h' },
+                    { type: 'med', value: 'Glicose 50% 40 mL EV se glicemia<70; Glicemia 2/2h; monitorização contínua' }
+                ],
+                notes: 'Se Hidrocortisona indisponível: Metilprednisolona 20 mg 12/12h OU Dexametasona 4 mg 1x/dia.'
+            },
+            {
+                id: 35, name: 'Insuficiência Cardíaca Aguda (Perfis A/B/C/L) + EAP', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Classificação por perfusão (quente/frio) e congestão (seco/úmido).',
+                prescriptions: [
+                    { type: 'note', value: 'PERFIL A (Quente e Seco)' },
+                    { type: 'med', value: 'Ajuste VO das medicações prévias + manutenção da volemia' },
+                    { type: 'note', value: 'PERFIL B (Quente e Úmido)' },
+                    { type: 'med', value: 'Dieta hipossódica; restrição hídrica 1500-2000 mL/24h' },
+                    { type: 'med', value: 'Furosemida 20mg/2mL - 2 mL EV 6/6h (dose inicial 40-240 mg/dia). Sala Vermelha: 6 mL EV bolus' },
+                    { type: 'med', value: 'Enoxaparina 40mg/0,4mL SC 1x/dia; Enalapril 5mg 12/12h; Carvedilol 3,125mg 12/12h' },
+                    { type: 'med', value: 'Nitroprussiato de Sódio 2 mL + SG5% 248 mL EV BIC 2 mL/h (se hipertenso); Pesar/débito urinário 6/6h' },
+                    { type: 'note', value: 'PERFIL C (Frio e Úmido)' },
+                    { type: 'med', value: 'Dobutamina 250mg/20mL - 80 mL + SF0,9% 170 mL EV BIC 4 mL/h, titular 2 mL/h cada 10 min (máx 20)' },
+                    { type: 'med', value: 'Se PAS<75: Noradrenalina 16 mL + SG5% 234 mL EV BIC 10 mL/h + Dobutamina' },
+                    { type: 'med', value: 'Se PAS>90: Nitroprussiato de Sódio 2 mL + SG5% 248 mL EV BIC 2 mL/h + Dobutamina' },
+                    { type: 'med', value: 'Furosemida 6 mL EV bolus; suspender IECA/BRA; betabloqueador: reduzir se PAS 85-110, suspender se <85' },
+                    { type: 'note', value: 'PERFIL L (Frio e Seco)' },
+                    { type: 'med', value: 'SF0,9% 250 mL EV em 60 min (1 etapa) - reavaliar cada etapa' },
+                    { type: 'note', value: 'EDEMA AGUDO DE PULMÃO' },
+                    { type: 'med', value: 'Bomba de Nitroglicerina/Nitroprussiato (se hipertenso) + Morfina 1-3 mg (se PA normal) + Furosemida 1 mg/kg EV bolus + Dobutamina se refratário/hipotensão' },
+                    { type: 'med', value: 'Cabeceira elevada 30°; VNI CPAP 5-10 cmH2O se SatO2<90%' }
+                ],
+                notes: 'Pesquisar fatores precipitantes: má adesão, excesso água/sal, IAM, HAS, arritmias, infecções, TEP.'
+            },
+            {
+                id: 36, name: 'Intoxicações Exógenas - Geral', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'ABCD + CEATOX (5012-5311). Carvão ativado/lavagem gástrica conforme tempo e substância.',
+                prescriptions: [
+                    { type: 'note', value: 'VIAS DE EXPOSIÇÃO' },
+                    { type: 'med', value: 'PELE: retirar roupas, lavar copiosamente' },
+                    { type: 'med', value: 'OCULAR: lavar SF + oftalmo imediato' },
+                    { type: 'med', value: 'ORAL: carvão ativado, lavagem gástrica, irrigação intestinal, hiper-hidratação, alcalinização urina' },
+                    { type: 'note', value: 'LAVAGEM GÁSTRICA' },
+                    { type: 'med', value: 'Indicar <1h. Sonda orogástrica grosso calibre, DLE, 100-250 mL SF, retorno sucessivo' },
+                    { type: 'med', value: 'CONTRA: RNC sem proteção via aérea (IOT antes), cáusticos, hidrocarbonetos, hemorragia/perfuração GI' },
+                    { type: 'note', value: 'CARVÃO ATIVADO' },
+                    { type: 'med', value: '1g/kg (25-100g) diluído em água/SF/catárticos - 8 mL/g. Múltiplas doses: 0,5g/kg 4/4h' },
+                    { type: 'med', value: 'CONTRA: RNC, cáusticos, hidrocarbonetos, obstrução, tóxico não adsorvido (álcool, metanol, etilenoglicol, cianeto, ferro, lítio, flúor)' },
+                    { type: 'note', value: 'ALCALINIZAÇÃO URINÁRIA' },
+                    { type: 'med', value: '850 mL SG5% + 150 mL Bicarbonato de Sódio 8,4% (150 mEq) - manter pH urinário>7,5. Tóxicos: fenobarbital, salicilatos, clorpromazina, flúor, metotrexato, sulfonamidas' },
+                    { type: 'note', value: 'ANTÍDOTOS' },
+                    { type: 'med', value: 'Organofosforados/Carbamatos: Atropina 0,01-0,05 mg/kg IV' },
+                    { type: 'med', value: 'Fenotiazidas/Butirofenonas/Metoclopramida: Biperideno 0,04-0,1 mg/kg IV 4x/dia' },
+                    { type: 'med', value: 'Anfetaminas/LSD: Clorpromazina 1-2 mg/kg/dia' },
+                    { type: 'med', value: 'Benzodiazepínicos: Flumazenil 0,5-2 mg IV' },
+                    { type: 'med', value: 'Opiáceos: Naloxona 0,01 mg/kg IV' },
+                    { type: 'med', value: 'Paracetamol: N-acetilcisteína VO 140mg/kg + 70mg/kg 4/4h 72h; IV 150mg/kg 15min + 50mg/kg 4h + 100mg/kg 16h' },
+                    { type: 'med', value: 'Cumarínicos: Vitamina K 1mg/kg IM/IV (máx 40 mg/dia)' }
+                ],
+                notes: 'CEATOX - Disque-Intoxicação 0800 722 6001.'
+            },
+            {
+                id: 37, name: 'IOT Sequência Rápida + VM', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Indicações: RNC, SatO2<90%, bradicardia, PO2<60, PCR, fadiga muscular, FR>40, piora progressiva obstrução.',
+                prescriptions: [
+                    { type: 'note', value: 'PREPARO' },
+                    { type: 'med', value: 'Acesso calibroso (gelco 16); oxímetro; monitor cardíaco/PA; aspirador; laringoscópio; TOT 7-7,5 M e 8-8,5 H; cuff testado' },
+                    { type: 'med', value: 'Pré-oxigenar (O2 100%) com AMBU por alguns minutos' },
+                    { type: 'note', value: 'SEQUÊNCIA RÁPIDA (pct 70 kg)' },
+                    { type: 'med', value: 'Fentanil 3 mcg/kg (aprox. 3 mL EV)' },
+                    { type: 'med', value: 'Propofol 1,5 mg/kg (5 mL EV). Alternativa: Midazolam 0,2 mg/kg (3 mL) OU Quetamina 1-2 mg/kg' },
+                    { type: 'med', value: 'Succinilcolina 1,5 mg/kg (100 mg - 1 amp + 10 mL AD EV bolus). OU Rocurônio 1 mg/kg' },
+                    { type: 'note', value: 'VM - Parâmetros iniciais' },
+                    { type: 'med', value: 'PCV: FiO2 100%; PEEP 5; FR 16; Tinsp 1s; Pressão insp 20 cmH2O' },
+                    { type: 'med', value: 'VCV: FiO2 100%; PEEP 5; FR 16; Fluxo 30 L/min; VC 450 mL (6-8 mL/kg predito)' },
+                    { type: 'med', value: 'Ajustes: FiO2 para SatO2 94-96% (DPOC 88-90%). Asma: VC 5-8 mL/kg; FR 8-12; Pico<50; Platô<35; PEEP 3-5' },
+                    { type: 'note', value: 'SEDAÇÃO CONTÍNUA' },
+                    { type: 'med', value: 'Midazolam 5mg/mL - 20 mL + SF0,9% 80 mL (1 mg/mL) - 5 mL/h (0,1-0,3 mg/kg/h = 7-21 mL/h)' },
+                    { type: 'med', value: 'Fentanil 50mcg/mL - 20 mL + SF0,9% 80 mL (10 mcg/mL) - 5 mL/h (2,5-10 mL/h, máx 15)' },
+                    { type: 'med', value: 'Propofol 10mg/mL - 0,21-21 mL/h OU 20mg/mL - 0,11-11 mL/h (escala Ramsay alvo 3-4)' }
+                ],
+                notes: 'Não prescrever succinilcolina se ventilação com AMBU difícil.'
+            },
+            {
+                id: 38, name: 'ITU Baixa / ITU Alta / Cólica Renal', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'ITU baixa: ambulatorial. ITU alta: avaliar internação. Cólica renal: analgesia EV + urologista.',
+                prescriptions: [
+                    { type: 'note', value: 'ITU BAIXA' },
+                    { type: 'med', value: 'Nitrofurantoína 100mg 6/6h 5-7d OU Levofloxacino 250-500mg 1x/dia 3-5d OU Fosfomicina 3g dose única OU Norfloxacino 400mg 12/12h 5d' },
+                    { type: 'med', value: 'Dipirona 500mg 6/6h SOS; Fenazopiridina 100mg após refeições 8/8h 2d' },
+                    { type: 'note', value: 'ITU ALTA / PIELONEFRITE' },
+                    { type: 'med', value: 'Ciprofloxacino 400mg EV ou 500mg VO 12/12h 14d OU Levofloxacino 500mg 1x/dia 14d' },
+                    { type: 'med', value: 'OU Ceftriaxona 1g 12/12h ou 2g 1x/dia EV/IM 14d OU Amicacina 15 mg/kg OU Gentamicina 5 mg/kg 1x/dia 14d' },
+                    { type: 'note', value: 'ITU GESTAÇÃO (NÃO quinolonas, cloranfenicol, Sulfametoxazol + Trimetoprima, tetraciclinas)' },
+                    { type: 'med', value: 'Ampicilina 500mg 6/6h 7-10d OU Cefalexina 500mg 6/6h 7-10d. Grave: Gentamicina/Tobramicina 3-4 mg/kg IM 3x/dia 7d' },
+                    { type: 'note', value: 'CÓLICA RENAL - PS' },
+                    { type: 'med', value: 'Cetoprofeno 1 amp OU Tenoxicam 1 amp + Escopolamina + Dipirona 1 amp + Metoclopramida 1 amp + SF0,9% 100 mL EV lento' },
+                    { type: 'med', value: 'OU Escopolamina + Dipirona 1 amp + Tenoxicam 2 amp + SF0,9% 500 mL EV aberto' },
+                    { type: 'med', value: 'OU Diclofenaco 75mg IM; OU Tramadol 100mg + Metoclopramida 1 amp + SF0,9% 100 mL EV 40 min' },
+                    { type: 'note', value: 'CÓLICA RENAL - CASA' },
+                    { type: 'med', value: 'Tramadol 50mg 6/6h 3d; Paracetamol + Diclofenaco + Cafeína + Carisoprodol 8/8h 3d' }
+                ],
+                notes: 'Orientar retorno se dor persistente >7d, febre ou mal-estar.'
+            },
+            {
+                id: 39, name: 'IVAS (Resfriado / Gripe / Sinusite / Rinite)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Sintomáticos + lavagem nasal. Sinusite bacteriana >10d: ATB.',
+                prescriptions: [
+                    { type: 'med', value: 'Lavagem nasal SF; Dipirona 500mg 6/6h OU Paracetamol 750mg 6/6h' },
+                    { type: 'med', value: 'Opcionais: Cromoglicato dissódico 1 gota 4x/dia; Oximetazolina 3 gts 12/12h 3-5d; Budesonida 2 puffs 2x/dia 5d; Nafazolina 1-3 gts 2-3x/dia máx 3d' },
+                    { type: 'med', value: 'Gripe: + Diclofenaco 50mg 8/8h 3d OU Nimesulida 100mg 12/12h 3d OU Meloxicam 15mg 5d' },
+                    { type: 'med', value: 'Se grávidas/crianças/idosos/DM/DCV: Oseltamivir 75mg 12/12h 5d OU Zanamivir 10mg 12/12h 5d' },
+                    { type: 'note', value: 'SINUSITE' },
+                    { type: 'med', value: 'Sintomáticos + Amoxicilina 500mg 8/8h 14d (se bacteriana >10d)' },
+                    { type: 'note', value: 'RINITE ALÉRGICA' },
+                    { type: 'med', value: 'PS: Dexametasona 4-8mg IM' },
+                    { type: 'med', value: 'Casa: Loratadina 10mg 1x/dia 10d OU Dexclorfeniramina 2mg 8/8h 10d OU Loratadina + Pseudoefedrina 1x/dia 10d' },
+                    { type: 'med', value: 'Dexclorfeniramina + Betametasona 1cp 8/8h 10d; Fexofenadina + Pseudoefedrina 12/12h 10d; Budesonida nasal 2 jatos 12/12h 5d; Prednisolona 20mg manhã 5d' }
+                ],
+                notes: ''
+            },
+            {
+                id: 40, name: 'Lombalgias / Cervicalgias / Ciática / Dor Neuropática', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'AINE IM + relaxante muscular. Radiculopatia: Tramadol + Betametasona.',
+                prescriptions: [
+                    { type: 'note', value: 'PS' },
+                    { type: 'med', value: 'Cetoprofeno 1 amp IM OU Diclofenaco 1 amp IM; Dipirona + Prometazina + Adifenina 1 amp IM' },
+                    { type: 'med', value: 'Betametasona 1 amp IM (se hérnia disco)' },
+                    { type: 'med', value: 'OU Dipirona 1 amp + Dexametasona 4mg + Tenoxicam 1 amp EV' },
+                    { type: 'med', value: 'Se não melhorar: Tramadol 100mg + Metoclopramida 1 amp + SF 100 mL EV lento' },
+                    { type: 'note', value: 'CASA' },
+                    { type: 'med', value: 'Paracetamol + Diclofenaco + Cafeína + Carisoprodol 1cp 8/8h 3d; Meloxicam 15mg 1x/dia 5d; Paracetamol + Codeína 30mg 8/8h 5d' },
+                    { type: 'med', value: 'Ciclobenzaprina 10mg antes dormir 5d (advertir sonolência)' },
+                    { type: 'note', value: 'DOR NEUROPÁTICA CRÔNICA' },
+                    { type: 'med', value: 'Crise aguda: Dipirona 2g + Tramadol 100mg EV (superior à morfina)' },
+                    { type: 'med', value: 'Amitriptilina 25mg 2h antes dormir; Gabapentina 400mg 3x/dia (até 3600 SN); Ciclobenzaprina 5-20mg noite' }
+                ],
+                notes: ''
+            },
+            {
+                id: 41, name: 'Parada Cardiorrespiratória (PCR)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Ciclos 2 min. Compressões 5-6 cm, 100-120/min. 30:2 (1 ventilação/6s se IOT).',
+                prescriptions: [
+                    { type: 'note', value: 'RITMO CHOCÁVEL (FV/TV)' },
+                    { type: 'med', value: 'CHOQUE + compressões 2 min. Bifásico 120-200 J; Monofásico 360 J' },
+                    { type: 'med', value: '2º ciclo: Adrenalina 1mg/mL - 1 mL EV/IO bolus a cada 3-5 min' },
+                    { type: 'med', value: '3º ciclo: Amiodarona 300 mg (6 mL) EV/IO (1ª); 150 mg (3 mL) 2ª. OU Lidocaína 2% 1-1,5 mg/kg' },
+                    { type: 'note', value: 'RITMO NÃO CHOCÁVEL (Assistolia/AESP)' },
+                    { type: 'med', value: 'Adrenalina 1mg/mL - 1 mL EV/IO bolus a cada 3-5 min' },
+                    { type: 'note', value: '5 Hs' },
+                    { type: 'med', value: 'HIPOVOLEMIA: cristaloide 20 mL/kg; HIPÓXIA: O2 100%; ACIDEMIA: Bicarbonato 8,4% 50 mL EV 5 min' },
+                    { type: 'med', value: 'HIPOCALEMIA: KCl 19,1% 8 mL EV 3 min; HIPERCALEMIA: Gluconato de Cálcio 10% 30 mL + Glicose 50% 20 mL + Insulina 5 UI + Bicarbonato 50 mL' },
+                    { type: 'med', value: 'HIPOTERMIA: aquecimento ativo/passivo; SF 40-42°C 500-2000 mL; ECMO' },
+                    { type: 'note', value: '5 Ts' },
+                    { type: 'med', value: 'PNEUMOTÓRAX: toracocentese 5º EIC jelco 14G + dreno' },
+                    { type: 'med', value: 'TAMPONAMENTO: pericardiocentese USG' },
+                    { type: 'med', value: 'TOXINAS: prolongar RCP + antagonistas + Disque-Intoxicação 0800 722 6001' },
+                    { type: 'med', value: 'TROMBOSE CORONÁRIA: angioplastia/trombólise; TEP: Alteplase 0,6 mg/kg (máx 50 mg) EV 15 min' },
+                    { type: 'note', value: 'PÓS-PCR' },
+                    { type: 'med', value: 'Ringer Lactato 500 mL EV aberto (máx 20-30 mL/kg); Noradrenalina 10 mL/h se PAM<65; FR 10; PaCO2 35-45; SpO2 92-98%; glicemia 140-180; hipotermia 32-36°C por ≥24h' }
+                ],
+                notes: 'Pós-PCR: acesso central, ECG 12 derivações.'
+            },
+            {
+                id: 42, name: 'Pneumonia Adquirida na Comunidade', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'CURB-65: Confusão, Ureia>40, FR>30, PS<90, idade>65. 0-1: ambulatorial. ≥2: internação. ≥4: UTI.',
+                prescriptions: [
+                    { type: 'note', value: 'AMBULATORIAL (ATB oral 7-14d)' },
+                    { type: 'med', value: 'Amoxicilina 500mg 8/8h 10-14d OU Amoxicilina + Clavulanato 500+125 8/8h OU 875+125 12/12h' },
+                    { type: 'med', value: 'OU Azitromicina 500mg 1x/dia 3-5d. OU Levofloxacino 500mg 1x/dia 10d OU Claritromicina 500mg 12/12h + Amoxicilina + Clavulanato' },
+                    { type: 'med', value: 'Dipirona 500mg 1cp 6/6h se febre' },
+                    { type: 'note', value: 'HOSPITALAR' },
+                    { type: 'med', value: 'Ceftriaxona 1g 12/12h + Claritromicina 500mg 12/12h OU Levofloxacino 500mg EV 12/12h' },
+                    { type: 'note', value: 'RISCO PSEUDOMONAS' },
+                    { type: 'med', value: 'Cefepime 1g 8/8h + Ciprofloxacino 200-400mg 12/12h OU Ceftazidima 1g + Ciprofloxacino OU Imipenem 500mg 6/6h + Ciprofloxacino OU Piperacilina + Tazobactam 2-4g 8/8h + Ciprofloxacino' },
+                    { type: 'note', value: 'UTI' },
+                    { type: 'med', value: 'Quinolona Resp (Levofloxacino/Moxifloxacino) + Ceftriaxona OU Macrolídeo (Azitromicina/Eritromicina) + Ceftriaxona' }
+                ],
+                notes: 'Pneumococo resistente: >65 anos, B-lactâmico <3 meses, alcoolismo, comorbidades, imunossupressão.'
+            },
+            {
+                id: 43, name: 'Sepse / Choque Séptico', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Infecção + disfunção orgânica. qSOFA ≥2. 1ª hora: exames + culturas + ATB + expansão 30 mL/kg.',
+                prescriptions: [
+                    { type: 'note', value: 'ATB POR FOCO' },
+                    { type: 'med', value: 'Pulmonar: Ceftriaxona 1g 2 fr 1x/dia + Claritromicina 500mg EV 12/12h' },
+                    { type: 'med', value: 'Abdominal: Ceftriaxona 2 fr 1x/dia + Metronidazol 500mg EV 8/8h OU Piperacilina + Tazobactam 4,5g EV 6/6h' },
+                    { type: 'med', value: 'Urinário: Ceftriaxona 1g 1x/dia OU Ciprofloxacino 200mg 2 bolsas EV 12/12h' },
+                    { type: 'med', value: 'Pele/Partes moles: Oxacilina 500mg 4 fr EV 4/4h. Com necrose: + Clindamicina 600mg EV 6/6h' },
+                    { type: 'med', value: 'Corrente sanguínea: Meropenem 1g EV 8/8h + Vancomicina 1g EV 12/12h' },
+                    { type: 'med', value: 'Sem foco: Cefepime 2g EV 8/8h + Metronidazol 500mg EV 8/8h' },
+                    { type: 'note', value: 'EXPANSÃO VOLÊMICA' },
+                    { type: 'med', value: 'Ringer Lactato ou SF0,9% 30 mL/kg EV. 500 mL bolus, reavaliar cada etapa. PAM 65-70 (80-85 se HAS crônica)' },
+                    { type: 'note', value: 'CHOQUE REFRATÁRIO' },
+                    { type: 'med', value: 'Noradrenalina 16 mL + SG5% 234 mL EV BIC 10 mL/h, titular 2 mL/h cada 2-5 min (1 mL/h ≈ 1 mcg/min)' },
+                    { type: 'med', value: 'Se NA 0,25-0,5 mcg/kg/min: associar Vasopressina 1 mL + SF0,9% 100 mL EV BIC 9 mL/h (0,03 U/min fixo)' },
+                    { type: 'med', value: 'Hidrocortisona 100mg EV 8/8h + Fludrocortisona 0,1mg VO/SNG 1x/dia (5-7d)' }
+                ],
+                notes: 'Bicarbonato: pH<7,1 + HCO3<6 OU pH<7,2 + LRA grave. Transfusão CH se Hb<7.'
+            },
+            {
+                id: 44, name: 'Taquiarritmias (QRS estreito/largo)', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: '5 perguntas ao ECG: existe taquicardia? onda P? onda F? QRS estreito/largo? R-R regular/irregular?',
+                prescriptions: [
+                    { type: 'note', value: 'QRS ESTREITO E R-R REGULAR - ESTÁVEL' },
+                    { type: 'med', value: 'Manobras vagais. Adenosina 6 mg EV bolus + flush; se não reverter 12 mg após 2 min (máx 30 mg)' },
+                    { type: 'med', value: 'Se falha: Metoprolol 2,5-5 mg EV lento 3-5 min (máx 15 mg)' },
+                    { type: 'note', value: 'QRS LARGO R-R REGULAR (TV Monomórfica)' },
+                    { type: 'med', value: 'Amiodarona 150mg - 3 mL + SG5% 100 mL EV 15 min (repetir até 3x). Se falha: CV sincronizada 100 J' },
+                    { type: 'note', value: 'TORSADES DE POINTES' },
+                    { type: 'med', value: 'Sulfato de Magnésio 10% - 20 mL + SF0,9% 100 mL EV 15 min OU 50% - 4 mL + SF0,9% 100 mL' },
+                    { type: 'note', value: 'TV POLIMÓRFICA COM QT NORMAL' },
+                    { type: 'med', value: 'Amiodarona 3 mL + SG5% 100 mL EV 15 min' },
+                    { type: 'note', value: 'TAQUICARDIA ATRIAL' },
+                    { type: 'med', value: 'Unifocal: tratar doença base, suspender digitálico, lidocaína, propafenona' },
+                    { type: 'med', value: 'Multifocal: compensar distúrbio respiratório, suspender aminofilina, Verapamil, metoprolol' },
+                    { type: 'med', value: 'Flutter atrial: cardioversão se instável, b-bloqueador, anticoagulação' }
+                ],
+                notes: 'Paciente instável = CVE imediata (exceto TV polimórfica = desfibrilação).'
+            },
+            {
+                id: 45, name: 'Trombose Venosa Profunda (TVP) / TEP', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Avaliar internação vs ambulatório. TVP: anticoagulação plena 3-6 meses. TEP: estratificar por PESI.',
+                prescriptions: [
+                    { type: 'note', value: 'TVP - OPÇÃO 01 (DOAC)' },
+                    { type: 'med', value: 'Rivaroxabana 15mg 1cp 12/12h 21 dias, seguido 20mg 1cp 1x/dia por 3-6 meses' },
+                    { type: 'med', value: 'OU Apixabana 5mg - 2 cp 12/12h 7 dias, seguido 5mg 1cp 12/12h' },
+                    { type: 'note', value: 'TVP - OPÇÃO 02 (Enoxaparina)' },
+                    { type: 'med', value: 'Enoxaparina 1 mg/kg SC 12/12h ou 1,5 mg/kg 1x/dia por 5-10 dias, seguido DOAC ou Varfarina' },
+                    { type: 'med', value: 'OU Heparina Não Fracionada 25.000U/5mL - 5 mL + SF0,9% 245 mL. Ataque 80 U/kg EV + Manutenção 18 U/kg/h EV BIC + Varfarina 5mg/dia' },
+                    { type: 'note', value: 'TEP - RISCO BAIXO (domiciliar)' },
+                    { type: 'med', value: 'Rivaroxabana 15mg 12/12h 21 dias, seguido 20mg 1x/dia OU Apixabana 5mg - 2cp 12/12h 7 dias, seguido 5mg 1cp 12/12h' },
+                    { type: 'note', value: 'TEP - INTERMEDIÁRIO (enfermaria)' },
+                    { type: 'med', value: 'Enoxaparina 1 mg/kg SC 12/12h; transição VO após 5-10 dias' },
+                    { type: 'note', value: 'TEP - ALTO RISCO/CHOQUE' },
+                    { type: 'med', value: 'Alteplase 50mg/50mL - 100 mL EV em 2h; Noradrenalina 10 mL/h se PAS<90; Dobutamina 4 mL/h se choque VD' },
+                    { type: 'med', value: 'Enoxaparina 1 mg/kg SC 12/12h após trombólise' }
+                ],
+                notes: 'Contraindicações trombólise: AVCH prévio, AVC isquêmico <3 meses, sangramento ativo, dissecção aorta.'
+            },
+            {
+                id: 46, name: 'Tuberculose', category: 'Banco de Socorro', specialty: 'Clínica Médica',
+                abordagemGeral: 'Esquema básico RIPE por 6 meses. Notificação compulsória.',
+                prescriptions: [
+                    { type: 'med', value: 'Fase intensiva (2 meses): Rifampicina 150mg + Isoniazida 75mg + Pirazinamida 400mg + Etambutol 275mg - 4 comprimidos em jejum' },
+                    { type: 'med', value: 'Após 2 meses: repetir BAAR' },
+                    { type: 'med', value: 'Fase manutenção (4 meses): Rifampicina 300-200mg + Isoniazida 150-100mg - 2 cápsulas' }
+                ],
+                notes: 'Notificação compulsória.'
+            },
+
+            // ==================== BANCO DE SOCORRO / CIRURGIA ====================
+            {
+                id: 47, name: 'Acidente Ofídico Botrópico (Jararaca)', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'SAB conforme gravidade. Edema: 1 segmento leve, 2 moderado, 3 grave.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero; SF0,9% 1000 mL EV 100 mL/h' },
+                    { type: 'med', value: 'SAB - Moderado (2 segmentos): 6 ampolas (60 mL) em SF 250 mL EV 30 min. Leve: 3 ampolas; Grave: 12 ampolas' },
+                    { type: 'med', value: 'O2 se SatO2<94%; monitorar diurese (alvo 30 mL/h)' },
+                    { type: 'med', value: 'Reação anafilática: Suspender SAB; SF0,9% 500 mL 3 etapas EV aberto; Epinefrina 0,5 mL IM; Hidrocortisona 500mg EV 15 min' }
+                ],
+                notes: 'Se reação: Prometazina 1 mL IM; Salbutamol 20 gts + SF 3 mL inalatória.'
+            },
+            {
+                id: 48, name: 'Acidente Ofídico Crotálico (Cascavel)', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'Hidratação vigorosa (diurese 2-3 mL/kg/h).',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero; SF0,9% 1000 mL EV 100 mL/h (ajustar para diurese 2-3 mL/kg/h)' },
+                    { type: 'med', value: 'SAC - Moderado: 10 ampolas (100 mL) em SF 250 mL EV 20-30 min. Leve: 5 ampolas; Grave: 20 ampolas' },
+                    { type: 'med', value: 'Reação anafilática: Suspender SAC; SF 500 mL 3 etapas; Epinefrina 0,5 mL IM; Hidrocortisona 500mg EV 15 min' }
+                ],
+                notes: 'Considerar hemodiálise se IRA/CPK alto.'
+            },
+            {
+                id: 49, name: 'Artrite Séptica', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'Drenagem articular + ATB empírico. Evitar AINE na fase aguda.',
+                prescriptions: [
+                    { type: 'med', value: 'Oxacilina 500mg - 4 fr em 5 mL AD + SF 100 mL EV 30 min 4/4h (2g 4/4h)' },
+                    { type: 'med', value: 'Se risco Gram-: + Ceftriaxona 1g 12/12h OU Cefotaxima 2g 8/8h OU Ceftazidima 2g 8/8h OU Ciprofloxacino 400mg 12/12h' },
+                    { type: 'med', value: 'Alérgico penicilina: Clindamicina 600mg 4 mL + SF 100 mL EV 60 min 8/8h' },
+                    { type: 'med', value: 'Suspeita MRSA: Vancomicina 500mg 2 fr (1g) + SF 250 mL EV 2h 12/12h' },
+                    { type: 'med', value: 'Dipirona 500mg/mL 2 mL + 18 mL AD EV 6/6h SOS; Tramadol 50mg/mL 2 mL + SF 100 mL EV 6/6h SOS' }
+                ],
+                notes: 'Duração 2-6 semanas. Conversão VO após melhora.'
+            },
+            {
+                id: 50, name: 'AVC Hemorrágico - Tratamento', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'Avaliação neurocirurgia. Controle PA e HIC.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero; SF0,9% 500 mL EV 28 gts/min em 4 etapas' },
+                    { type: 'med', value: 'Nitroprussiato de Sódio 2 mL + SG5% 248 mL EV BIC 5-10 mL/h se PAS>150 (máx 45)' },
+                    { type: 'med', value: 'Dipirona 2 mL + 18 mL AD EV 6/6h SOS; Bromoprida 8/8h SOS; Fenitoína 25 mL + SF 250 mL 300 mL/h se crise' },
+                    { type: 'med', value: 'Glicose 50% 20 mL EV se glicemia<60; Insulina SC conforme HGT; cabeceira 30°' },
+                    { type: 'med', value: 'Reverter anticoagulação: Varfarina→Complexo Protrombínico 4F + Vit K; Dabigatrana→Idarucizumabe 5g; DOAC→Alfa-andexanete; Heparina Não Fracionada→Protamina' },
+                    { type: 'med', value: 'HIC: Manitol 20% 1g/kg EV 30 min 6/6h OU NaCl 20% 30 mL 6/6h OU Soro Fisiológico 3% 3 mL/kg 20 min. Glicocorticoides NÃO' }
+                ],
+                notes: ''
+            },
+            {
+                id: 51, name: 'Hemorragia Digestiva Alta Não Varicosa', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'Reposição volêmica (PAS 100, FC<100). Transfusão Hb<7. EDA <24h. IBP conforme Forrest.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero; SF0,9% 500 mL EV 30 min (máx 3L 6h)' },
+                    { type: 'med', value: 'Omeprazol 40mg/fr - 2 fr EV bolus 5 min (ataque); 1 fr EV 12/12h após 12h do ataque' },
+                    { type: 'med', value: 'Eritromicina 1000mg/fr - 20 mL AD + 5 mL em SF0,9% 250 mL EV 60 min (90 min antes EDA)' },
+                    { type: 'med', value: 'Forrest Ia/Ib/IIa/IIb: Omeprazol 2 fr + SF0,9% 80 mL EV 8 mL/h por 72h' },
+                    { type: 'med', value: 'Forrest IIc/III: Omeprazol 40mg 1cp VO 12/12h' }
+                ],
+                notes: 'Transfusão: Hb<7→1 CH (alvo 7-9; 9-10 se DCV). Plaquetas<50.000: 1 U/10kg. INR>1,5: PFC 15-20 mL/kg.'
+            },
+            {
+                id: 52, name: 'Hemorragia Digestiva Alta Varicosa', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'Suspeitar em hipertensão portal/cirrose. Vasoconstrictores + ATB + EDA <24h.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero; SF0,9% 500 mL EV 30 min' },
+                    { type: 'med', value: 'Terlipressina 1mg/5mL - 10 mL EV bolus 1 min (ataque); 7 mL EV bolus lento 4/4h' },
+                    { type: 'med', value: 'Omeprazol 2 fr EV bolus 5 min; 1 fr EV 12/12h' },
+                    { type: 'med', value: 'Ceftriaxona 1g EV 24/24h (D1/D7); Eritromicina 1000mg 90 min antes EDA' }
+                ],
+                notes: 'Terlipressina por peso: <50kg 1 mg 4/4h; 50-70 1,5 mg; >70 2 mg 24h, depois 1 mg 4/4h. Profilaxia: Carvedilol 3,125 mg 12/12h (dia 5).'
+            },
+            {
+                id: 53, name: 'Hemorragia Digestiva Baixa', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'Estabilidade para colonoscopia. Excluir HDA com EDA. NÃO usar Ácido Tranexâmico.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero; SF0,9% 500 mL EV 30 min' },
+                    { type: 'med', value: 'Omeprazol 1 fr EV 24/24h até exclusão HDA; O2 se SatO2<94%; monitorização contínua' }
+                ],
+                notes: 'Preparo cólon: Bisacodil 2cp 24h antes + Manitol 500 mL + 500 mL água em 90 min 6h antes.'
+            },
+            {
+                id: 54, name: 'Pancreatite Aguda', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'Ringer Lactato. Controle da dor. Suporte nutricional precoce.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta zero; Ringer Lactato 500 mL - 5 bolsas EV 33 gts/min' },
+                    { type: 'med', value: 'Dipirona 500mg/mL - 2 mL + 18 mL AD EV 6/6h; Morfina 4 mL EV 6/6h' },
+                    { type: 'med', value: 'Bromoprida 2 mL + 18 mL AD EV 8/8h SOS' }
+                ],
+                notes: 'ATB empírico se infecção. Dieta oral pobre em gordura pode iniciar 24h.'
+            },
+            {
+                id: 55, name: 'Peritonite Bacteriana Espontânea (PBE)', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'Tratamento empírico breve. Coletar líquido ascítico antes.',
+                prescriptions: [
+                    { type: 'med', value: 'Dieta oral branda hipossódica; Cefotaxima 2g 8/8h OU Ceftriaxona 1g 12/12h por 5-7d' },
+                    { type: 'med', value: 'Grave (CLIF-SOFA≥7): Meropenem 1g 8/8h OU Ertapenem 1g 1x/dia OU Imipenem 500mg 6/6h' },
+                    { type: 'med', value: 'Albumina 20% 500 mL EV 40 gts/min (D0: 1,5 g/kg; D3: 1 g/kg se Cr>1, ureia>30 ou BT>4). Máx 100g' }
+                ],
+                notes: 'Profilaxia: Norfloxacino 400mg 24/24h OU Sulfametoxazol + Trimetoprima 800/160 OU Ciprofloxacino 500mg.'
+            },
+            {
+                id: 56, name: 'Síndrome Hepatorrenal', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'Albumina + vasoconstritores até 14 dias.',
+                prescriptions: [
+                    { type: 'med', value: '1ª: Albumina 1g/kg EV (máx 100 g) por 2 dias + suspender diuréticos/betabloqueador/nefrotóxicos' },
+                    { type: 'med', value: '2ª: Terlipressina 1mg/5mL - 5 mL EV bolus 6/6h + Albumina 20% 50 mL 8/8h' },
+                    { type: 'med', value: 'Se ausência resposta 48h: titular 2 mg/dia cada 24h (máx 12 mg/dia)' },
+                    { type: 'med', value: 'Alternativa: Noradrenalina 16 mL + SG5% 234 mL EV BIC 8-45 mL/h + Albumina 20% 50 mL 8/8h' }
+                ],
+                notes: 'Alvo: redução ≥25% da creatinina sérica.'
+            },
+            {
+                id: 57, name: 'Transfusão de Hemocomponentes', category: 'Banco de Socorro', specialty: 'Cirurgia',
+                abordagemGeral: 'Doses conforme hemocomponente.',
+                prescriptions: [
+                    { type: 'med', value: 'Crioprecipitado: 7 U - EV aberto 2-5 mL/min (1-1,5 U/10kg, até 30 min)' },
+                    { type: 'med', value: 'Concentrado Hemácias: 1 U - EV 1-4h (Hb<7-8; eleva Hb 1 g/dL e Ht 3%)' },
+                    { type: 'med', value: 'Plaquetas: 7 U - EV 30 min cada (1 U/10kg)' },
+                    { type: 'med', value: 'PFC: 3 U - EV 90 min cada, 8/8h (10-20 mL/kg)' }
+                ],
+                notes: 'Transfusão maciça 1:1:1 (CH:PFC:Plaquetas).'
+            },
+
+            // ==================== BANCO DE SOCORRO / GO ====================
+            {
+                id: 58, name: 'Eclâmpsia', category: 'Banco de Socorro', specialty: 'Ginecologia & Obstetrícia',
+                abordagemGeral: 'Emergência obstétrica. Alvo PAD ≤ 90-100 mmHg.',
+                prescriptions: [
+                    { type: 'med', value: 'Hidralazina 20mg/mL - 1 mL + 19 mL SF, 5 mL EV bolus' },
+                    { type: 'med', value: 'Repetir 5 mg a cada 20 min até PAD alvo (máx 30 mg = 6 adm)' },
+                    { type: 'med', value: 'Sulfato de Magnésio 10% 20 mL + SF 100 mL EV 15 min OU Sulfato de Magnésio 50% 4 mL + SF 100 mL EV 15 min' },
+                    { type: 'med', value: 'Alternativa: Nifedipina 10mg VO cada 30 min (máx 50 mg)' },
+                    { type: 'med', value: 'Monitorizar PA, reflexos patelares, FR, débito urinário. Avaliação obstétrica urgente' }
+                ],
+                notes: 'Antídoto Sulfato de Magnésio: Gluconato de Cálcio 10% 10 mL EV 10 min.'
+            },
+            {
+                id: 59, name: 'Sangramento Vaginal / Úlceras / Violência Sexual', category: 'Banco de Socorro', specialty: 'Ginecologia & Obstetrícia',
+                abordagemGeral: 'Sangramento: Ácido Tranexâmico + Vit K + encaminhar GO. Violência: notificação + profilaxias.',
+                prescriptions: [
+                    { type: 'note', value: 'SANGRAMENTO VAGINAL - PS' },
+                    { type: 'med', value: 'Ácido Tranexâmico 5 mL EV (1 mL/min); Vitamina K 1 amp IM + Cetoprofeno 1 amp IM' },
+                    { type: 'med', value: 'Casa: Ácido Mefenâmico 500mg 8/8h 3d; Ácido Tranexâmico 2cp 6/6h 3d; Meloxicam 15mg 1x/dia 5d' },
+                    { type: 'note', value: 'ÚLCERAS GENITAIS' },
+                    { type: 'med', value: 'Sífilis: Penicilina Benzatina 2,4M UI IM (1ª dose; 2ª e 3ª semanal)' },
+                    { type: 'med', value: 'Herpes: Aciclovir 400mg 3x/dia 7-10d + sintomáticos' },
+                    { type: 'med', value: 'Donovanose: Doxiciclina 100mg 12/12h 21d' },
+                    { type: 'med', value: 'Cancro Mole: Azitromicina 1g VO dose única' },
+                    { type: 'med', value: 'Linfogranuloma: Doxiciclina 100mg 12/12h 21d' },
+                    { type: 'note', value: 'VIOLÊNCIA SEXUAL' },
+                    { type: 'med', value: 'Notificação compulsória; solicitar HIV/VDRL/Hep B-C/HMG/transaminases + coleta vaginal' },
+                    { type: 'med', value: 'Contracepção emergência: Levonorgestrel 1,5 mg dose única (ou 0,75 mg 2 doses 12/12h) ou Etilnestradiol + Levonorgestrel até 72h' },
+                    { type: 'med', value: 'Profilaxia HIV: Zidovudina + Lamivudina + Lopinavir/Ritonavir até 72h. HBV: vacina + Imunoglobulina até 14d. Sífilis: Penicilina Benzatina 2,4M UI IM' },
+                    { type: 'med', value: 'Clamídia/Cancro: Azitromicina 1g dose única. Tricomoníase: Metronidazol 2g dose única. Gonorreia: Ceftriaxona 250mg IM' }
+                ],
+                notes: ''
+            },
+            {
+                id: 60, name: 'Vulvovaginites / Cervicite / Uretrite', category: 'Banco de Socorro', specialty: 'Ginecologia & Obstetrícia',
+                abordagemGeral: 'Critérios de Amsel (vaginose). pH, cultura, teste das aminas.',
+                prescriptions: [
+                    { type: 'note', value: 'VAGINOSE BACTERIANA' },
+                    { type: 'med', value: 'Metronidazol 500mg VO 12/12h 7d OU tópico 7d' },
+                    { type: 'note', value: 'CANDIDÍASE' },
+                    { type: 'med', value: 'Miconazol creme vaginal 7 noites OU Fluconazol 150mg VO dose única' },
+                    { type: 'note', value: 'TRICOMONÍASE' },
+                    { type: 'med', value: 'Metronidazol 500mg 12/12h 7d OU tópico 7d. TRATAR PARCEIRO' },
+                    { type: 'note', value: 'CERVICITE / URETRITE (Gonorreia)' },
+                    { type: 'med', value: 'Ceftriaxona 250mg IM dose única OU Ciprofloxacino 500mg VO dose única' },
+                    { type: 'med', value: 'Azitromicina 1g VO dose única OU Doxiciclina 100mg 12/12h 7d. Notificar parceiro' }
+                ],
+                notes: ''
+            },
+
+            // ==================== BANCO DE SOCORRO / PEDIATRIA ====================
+            {
+                id: 61, name: 'Asma / Bronquiolite Pediátrica', category: 'Banco de Socorro', specialty: 'Pediatria',
+                abordagemGeral: 'Asma: salbutamol + ipratrópio + corticoide. Bronquiolite: suporte, NÃO usar corticoide.',
+                prescriptions: [
+                    { type: 'note', value: 'ASMA PEDIÁTRICA' },
+                    { type: 'med', value: 'Salbutamol 3 gts/kg + Ipratrópio (dobro) em SF0,9% 5 mL - inalação 3x com intervalo 20 min' },
+                    { type: 'med', value: 'Corticoide se não houver resposta: Metilprednisolona 1 mg/kg/dia EV 6/6h por 48h com desmame' },
+                    { type: 'note', value: 'BRONQUIOLITE' },
+                    { type: 'med', value: 'Suporte (controle T, aporte hídrico, limpeza VAS com SF). NÃO usar corticoide. Pode responder a broncodilatador' }
+                ],
+                notes: 'Bronquiolite: VSR, <2 anos. Rx: hiperinsuflação, retificação arcos costais.'
+            },
+            {
+                id: 62, name: 'GECA Pediátrica (Gastroenterocolite Aguda)', category: 'Banco de Socorro', specialty: 'Pediatria',
+                abordagemGeral: 'Avaliar desidratação. Reidratação oral/EV conforme perda de peso.',
+                prescriptions: [
+                    { type: 'note', value: 'AVALIAÇÃO DE DESIDRATAÇÃO' },
+                    { type: 'med', value: 'Não desidratado (<3%): SRO casa' },
+                    { type: 'med', value: 'Leve (3-9%): SRO/EV supervisionado' },
+                    { type: 'med', value: 'Grave (>9%): EV' },
+                    { type: 'note', value: 'REIDRATAÇÃO EV' },
+                    { type: 'med', value: 'SF0,9% ou Ringer Lactato 100 mL/kg' },
+                    { type: 'note', value: 'MANUTENÇÃO' },
+                    { type: 'med', value: '<1 ano: 30 mL/kg (1h) + 70 mL/kg (5h); 1-2 anos: 30 min + 2,5h' },
+                    { type: 'med', value: 'Se permanece com gravidade: repetir 30 mL/kg' },
+                    { type: 'note', value: 'ATB (disenteria ou risco)' },
+                    { type: 'med', value: 'Ácido Nalidíxico 75 mg/kg/dia 4 tomadas por 5d' },
+                    { type: 'note', value: 'SORO MANUTENÇÃO PEDIÁTRICO' },
+                    { type: 'med', value: 'Até 10 kg: 100 kcal/kg; 10-20 kg: 1000 + 50 kcal/kg; 20-30 kg: 1500 + 20 kcal/kg' },
+                    { type: 'med', value: 'Por 100 kcal: glicose 8g + Na 3 mEq + K 2,5 mEq + água 100 mL. 80% SG10% + 20% SF0,9%; K 1 mL/100 kcal' }
+                ],
+                notes: ''
+            },
+            {
+                id: 63, name: 'IVAS Pediátrica (Resfriado / Gripe / Sinusite / Amigdalite / OMA)', category: 'Banco de Socorro', specialty: 'Pediatria',
+                abordagemGeral: 'Maioria viral. Sintomáticos + hidratação. ATB apenas se bacteriana.',
+                prescriptions: [
+                    { type: 'note', value: 'RESFRIADO / GRIPE' },
+                    { type: 'med', value: 'Analgésicos/antitérmicos, hidratação, SF para obstrução nasal, inalação' },
+                    { type: 'note', value: 'SINUSITE' },
+                    { type: 'med', value: 'Limpeza nasal SF; Amoxicilina 45-90 mg/kg/dia em 3 doses por 14-21d' },
+                    { type: 'note', value: 'AMIGDALITE' },
+                    { type: 'med', value: 'Penicilina V 125-250 mg 2-3x/dia por 10d OU Amoxicilina 40 mg/kg/dia em 3 doses' },
+                    { type: 'med', value: 'OU Azitromicina dose única diária 3-5d OU Cefadroxil 30 mg/kg/dia 1-2 doses 10d (alérgicos)' },
+                    { type: 'note', value: 'OMA' },
+                    { type: 'med', value: 'Grave: Amoxicilina 80-90 mg/kg; Alérgicos: Cefuroxima ou Azitromicina' },
+                    { type: 'med', value: 'Sim: Amoxicilina + Clavulanato ou Ceftriaxona. Tratamento 10-14d' },
+                    { type: 'med', value: 'Complicação mastoidite: internação + Ceftriaxona EV' }
+                ],
+                notes: 'Sinais de gravidade: placas/membranas, toxemia, dor/edema em mastoide, sinais meníngeos, celulite periorbitária.'
+            },
+            {
+                id: 64, name: 'Pneumonia Pediátrica', category: 'Banco de Socorro', specialty: 'Pediatria',
+                abordagemGeral: 'Idade <2m: internação. Tratamento conforme faixa etária.',
+                prescriptions: [
+                    { type: 'note', value: 'ETIOLOGIA' },
+                    { type: 'med', value: 'RN: Streptococcus B, Klebsiella, E. coli, Listeria. 2 sem-3m: Chlamydia. 1m-5a: vírus, pneumococo, H. influenzae, S. aureus. >5a: pneumococo, micoplasma, clamídia, vírus' },
+                    { type: 'note', value: 'INDICAÇÃO HOSPITALIZAÇÃO' },
+                    { type: 'med', value: '<2m; comprometimento geral; tiragem/gemido/cianose; desnutrição/cardiopatia grave; complicações radiológicas' },
+                    { type: 'note', value: 'AMBULATORIAL (7-10d)' },
+                    { type: 'med', value: '2m-5a: Amoxicilina, ampicilina. >5a: Amoxicilina, eritromicina, azitromicina' },
+                    { type: 'note', value: 'HOSPITALAR' },
+                    { type: 'med', value: '<2m: Ampicilina + Gentamicina OU Ampicilina + Cefotaxima/Ceftriaxona' },
+                    { type: 'med', value: '2m-5a: Penicilina cristalina; grave: Ceftriaxona + Oxacilina OU Amoxicilina + Clavulanato' },
+                    { type: 'med', value: '>5a: Penicilina cristalina OU macrolídeo' }
+                ],
+                notes: 'Taquipneia: 60 irpm <2m; 50 2m-1a; 40 2-4a.'
+            },
+            {
+                id: 65, name: 'RCP Pediátrica / Crise Convulsiva Infantil', category: 'Banco de Socorro', specialty: 'Pediatria',
+                abordagemGeral: 'C-A-B. Compressões 1/3 diâmetro AP. Lactente 4 cm; Criança 5 cm. 100/min.',
+                prescriptions: [
+                    { type: 'note', value: 'RCP' },
+                    { type: 'med', value: 'C-A-B. Não responsivo: sem respiração/gasping + sem pulso em 10s' },
+                    { type: 'med', value: 'Compressões: 100-120/min. Relação 30:2 (1 socorrista) ou 15:2 (2 profissionais). DEA assim que disponível' },
+                    { type: 'med', value: 'Epinefrina 1:1.000 - EV/IO 0,01 mg/kg (0,1 mL/kg 1:10.000); ET 0,1 mg/kg. Máx 1 mg/dose a cada 3 min' },
+                    { type: 'med', value: 'Bicarbonato de Sódio 8,4% - 1 mL/kg (1:1 AD); Glicose 50% - 2 mL/kg (1:1); Atropina 0,02 mg/kg (mín 0,1 mg)' },
+                    { type: 'note', value: 'CRISE CONVULSIVA' },
+                    { type: 'med', value: 'Diazepam 0,3-0,5 mg/kg EV sem diluir (NÃO em RN)' },
+                    { type: 'med', value: 'Fenitoína 5-10 mg/kg EV (diluído). Manutenção 5-7 mg/kg/dia EV 12/12h' },
+                    { type: 'med', value: 'Estado de mal: Fenobarbital EV; Midazolam 0,2 mg/kg; IOT+VM; Tiopental 5 mg/kg' }
+                ],
+                notes: 'Sinais de alerta: FR>60, batimento asa nariz, tiragem, pulso fino, TEC>2s, cianose/palidez, alteração consciência, ↓diurese.'
+            },
+
+            // ==================== AMBULATÓRIO / CLÍNICA MÉDICA ====================
+            {
+                id: 100, name: 'Afta / Quelite / Herpes Bucal', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Lesões orais autolimitadas.',
+                prescriptions: [
+                    { type: 'med', value: 'Afta: Nistatina solução - 1 colher em ½ copo água e bochechar 5d OU Subsalicilato de bismuto 2 gts 4x/dia OU Triancinolona Orabase 3x/dia' },
+                    { type: 'med', value: 'Quelite: Dexametasona pomada 2x/dia 5d' },
+                    { type: 'med', value: 'Herpes: Aciclovir pomada 2x/dia 7d; Dipirona 500mg 8/8h se febre; 1ª manifestação: Aciclovir 200mg 4/4h 7-10d' }
+                ],
+                notes: ''
+            },
+            {
+                id: 101, name: 'Alergias / Urticárias / Insolação / Queimaduras', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Anti-histamínicos + corticoide curto. Queimaduras: tópico + ATB.',
+                prescriptions: [
+                    { type: 'med', value: 'Alergias: Loratadina 10mg 12/12h 10d OU Hidroxizina 10mg 1cp 10d; Prednisona 20mg manhã 5d' },
+                    { type: 'med', value: 'Insolação: Cuidados gerais; Cânfora + Óxido de Zinco 3x/dia 5d; Dipirona 500mg 6/6h SOS; Diidroergotamina + Cafeína + Dipirona 1cp 8/8h SOS' },
+                    { type: 'med', value: 'Queimaduras: Sulfadiazina de Prata; Cefalexina 500mg 6/6h 10d; Dipirona 500mg 6/6h SOS' }
+                ],
+                notes: ''
+            },
+            {
+                id: 102, name: 'Amigdalite / Otite / Tosse', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'ATB para amigdalite bacteriana e OMA. Tosse: antitussígeno ou expectorante.',
+                prescriptions: [
+                    { type: 'med', value: 'Amigdalite: Amoxicilina 500mg 8/8h OU 875mg 12/12h 10d OU Azitromicina 500mg 1x/dia 5d' },
+                    { type: 'med', value: 'Ibuprofeno 300mg 8/8h 5d; Dipirona/Paracetamol 6/6h SOS; spray para garganta 4/4h 3d' },
+                    { type: 'med', value: 'OMA: Amoxicilina 500mg 8/8h 10d OU Amoxicilina + Clavulanato 8/8h 7-10d OU Azitromicina 500mg 1x/dia 3d OU Sulfametoxazol + Trimetoprima 12/12h 7-10d' },
+                    { type: 'med', value: 'Otite externa: Ciprofloxacino + Dexametasona 3 gts 2x/dia 7d OU Betametasona + Clorfenesina 3 gts 3x/dia 7d + Amoxicilina 500mg 10d + calor local' },
+                    { type: 'med', value: 'Tosse seca: Dextrometorfano xarope 15 mL 12/12h (máx 10d) OU Antux 5 mL 8/8h 3-5d OU Bisoltussim 15 mL 8/8h 3d OU Levodropropizina 10 mL 3x/dia 5d' },
+                    { type: 'med', value: 'Tosse secretiva: Lavagem SF/NaCl 3%; Acetilcisteína 15 mL 1x/dia 5d OU envelope 200mg 8/8h 3d; Bromexina 10 mL 8/8h 3d' }
+                ],
+                notes: ''
+            },
+            {
+                id: 103, name: 'Antiparasitários e Anti-helmínticos', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Verminoses e protozooses.',
+                prescriptions: [
+                    { type: 'med', value: 'Mebendazol 100mg VO 12/12h 3d. Repetir após 2 sem OU Albendazol 400mg VO dose única' },
+                    { type: 'med', value: 'Giardíase: Metronidazol 250mg 8/8h 5d' },
+                    { type: 'med', value: 'Amebíase: Metronidazol 500mg 6/6h 5-7d (intestinal) ou 7-10d (hepática)' },
+                    { type: 'med', value: 'OU Tinidazol 2g dose única após jantar (2 dias se amebíase) OU Nitazoxanida 500mg 12/12h 3d' }
+                ],
+                notes: ''
+            },
+            {
+                id: 104, name: 'Asma / DPOC - Manutenção', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Controle de sintomas. Corticoide inalatório + broncodilatador SOS.',
+                prescriptions: [
+                    { type: 'note', value: 'ASMA' },
+                    { type: 'med', value: 'Salbutamol 100 mcg - 2-3 jatos 4/4h SOS' },
+                    { type: 'med', value: 'Inalação: SF0,9% 5 mL + Ipratrópio 20 gts + Fenoterol 6 gts 4/4h 5d' },
+                    { type: 'med', value: 'Prednisona 1-2 mg/kg/dia (40-60 mg) VO 7d' },
+                    { type: 'note', value: 'DPOC' },
+                    { type: 'med', value: 'Amoxicilina + Clavulanato 500+125 8/8h 7d OU 875+125 12/12h; classe IV: Levofloxacino 500mg' },
+                    { type: 'med', value: 'Prednisona 20mg 1cp manhã 5d; Inalação SF 5 mL + Ipratrópio 30 gts + Fenoterol 8 gts 6/6h 5d' }
+                ],
+                notes: ''
+            },
+            {
+                id: 105, name: 'Cefaleia Tensional / Enxaqueca', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Tratamento domiciliar conforme tipo de cefaleia.',
+                prescriptions: [
+                    { type: 'med', value: 'Tensional: Dipirona 500mg 6/6h; Dimenidrato 40 gts 6/6h ou 100mg 6/6h' },
+                    { type: 'med', value: 'Enxaqueca: Dipirona + Isometepteno + Cafeína 2cp 6/6h OU Diidroergotamina + Cafeína + Dipirona 1cp 8/8h OU Diidroergotamina + Cafeína + Paracetamol + Metoclopramida 1cp 8/8h OU Naratriptano 1cp 1x/dia 3d OU Sumatriptano 25mg + repetir 2h' }
+                ],
+                notes: ''
+            },
+            {
+                id: 106, name: 'Conjuntivite / Hordéolo', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Viral: lubrificante. Bacteriana: ATB tópico.',
+                prescriptions: [
+                    { type: 'med', value: 'Viral: Lubrificante ocular 1 gota 4x/dia 5d; lavagem SF; compressa gelada' },
+                    { type: 'med', value: 'Bacteriana: Colírio Ofloxacino 6/6h até 10d OU Ciprofloxacino 6/6h 5d OU Tobramicina 4/4h 7d' },
+                    { type: 'med', value: 'Hordéolo: Compressas água morna 3/3h 15 min até desaparecer' }
+                ],
+                notes: 'Se não melhorar em 4 dias, encaminhar oftalmo.'
+            },
+            {
+                id: 107, name: 'Depressão / Ansiedade / Tabagismo / Insônia', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Antidepressivos e psicoterapia. Tabagismo: Bupropiona. Insônia: hipnóticos por curto prazo.',
+                prescriptions: [
+                    { type: 'med', value: 'Depressão/Ansiedade/TOC: Citalopram 20mg OU Venlafaxina 75mg LP OU Escitalopram 10mg' },
+                    { type: 'med', value: 'Tabagismo: Bupropiona 150mg LP - iniciar 1 sem antes. 3 dias: 1cp; depois 12/12h por até 12 sem' },
+                    { type: 'med', value: 'Adesivos de nicotina: 4 sem 21mg + 4 sem 14mg + 4 sem 7mg. Gomas de nicotina para resgate' },
+                    { type: 'med', value: 'Insônia: Zolpidem 10mg OU Ciclobenzaprina 10-20mg ao deitar OU Amitriptilina 25mg 2h antes de dormir OU Sertralina 50mg antes de dormir. Máx 30 dias' }
+                ],
+                notes: ''
+            },
+            {
+                id: 108, name: 'Dermatologia (Pitiríase / Onicomicose / Tinea / Pediculose / Escabiose)', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Antifúngicos e antiparasitários.',
+                prescriptions: [
+                    { type: 'med', value: 'Pitiríase: Itraconazol 200mg 1x/dia 5d; Icadenspray/creme 2x/dia; Isoconazol creme; remoção mecânica com bucha' },
+                    { type: 'med', value: 'Onicomicose: Amorolfina 2x/sem 6-9 meses OU Tioconazol 2x/dia 6-12 meses + Itraconazol 100mg 2cp/dia 3 meses OU Fluconazol 150mg/sem 6 meses' },
+                    { type: 'med', value: 'Tinea: Cetoconazol creme 2x/dia 14d OU Betametasona + Cetoconazol 2x/dia 14d. Disseminado: Cetoconazol 200mg 4 sem OU Fluconazol 150mg/sem 4 sem' },
+                    { type: 'med', value: 'Pediculose: Deltametrina shampoo 1x/dia 4d + repetir 1 sem OU Permetrina 10 min + pente fino 2d + repetir 1 sem' },
+                    { type: 'med', value: 'Escabiose: Ivermectina 6mg dose única + repetir 1 sem; Dexclorfeniramina 2mg 8/8h 5d OU Hidroxizina 25mg à noite 5d' },
+                    { type: 'med', value: 'Permetrina 5% 3-5 noites + repetir 1 sem OU Deltametrina 1x/dia 10d' }
+                ],
+                notes: 'Fórmula escabiose: Enxofre 10% + Hidrocortisona 2% + Lactato amônia 10% + Alantoína 2% + Creme QSP 150 mL, 10 noites.'
+            },
+            {
+                id: 109, name: 'Dispepsia / Gastrite / DRGE', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'IBP + medidas comportamentais.',
+                prescriptions: [
+                    { type: 'med', value: 'Omeprazol 20mg 1cp jejum 30d OU Lansoprazol 40mg OU Pantoprazol 40mg OU Ranitidina 150mg 12/12h' },
+                    { type: 'med', value: 'Hidróxido de Alumínio 5 mL 8/8h 30d; Escopolamina + Dipirona 40 gts 8/8h' },
+                    { type: 'med', value: 'DRGE: Domperidona 10mg 8/8h antes refeições 30d (NÃO em cetoconazol) OU Bromoprida 10mg 8/8h' }
+                ],
+                notes: ''
+            },
+            {
+                id: 110, name: 'Dor Aguda / Edema MMII / Varizes', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Analgesia e tratamento conforme condição.',
+                prescriptions: [
+                    { type: 'med', value: 'Dor aguda: Dipirona 500mg 6/6h OU Dipirona + Prometazina + Adifenina 1cp 6/6h OU Paracetamol 500mg 6/6h; Paracetamol + Codeína 30mg 6/6h (receita controlada)' },
+                    { type: 'med', value: 'Edema: Furosemida 40mg 1cp manhã OU Hidroclorotiazida 50mg manhã até desaparecer' },
+                    { type: 'med', value: 'Varizes: Meia elástica média compressão; Venalot (cumarina + troxerrutina) 1cp 8/8h; Capilarema (diosmina + hesperidina) 75mg 12/12h' }
+                ],
+                notes: ''
+            },
+            {
+                id: 111, name: 'Erisipela / Impetigo / Furunculose', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'ATB oral para casos leves.',
+                prescriptions: [
+                    { type: 'med', value: 'Erisipela leve: Penicilina V oral 500mg 6/6h 10-14d OU Eritromicina 500mg 6/6h (alérgicos)' },
+                    { type: 'med', value: 'Impetigo: Cefalexina 500mg 6/6h 10d OU Amoxicilina + Clavulanato 875+125 12/12h 7-10d' },
+                    { type: 'med', value: 'Furunculose: Cefalexina 500mg 6/6h 7d OU Sulfametoxazol + Trimetoprima 800+160 12/12h 5-10d + Neomicina tópico' }
+                ],
+                notes: ''
+            },
+            {
+                id: 112, name: 'Gota', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Colchicina na crise + sintomáticos.',
+                prescriptions: [
+                    { type: 'med', value: 'Colchicina 0,5mg 1cp 12/12h 3d; Dipirona 500mg 1cp 6/6h SOS' }
+                ],
+                notes: ''
+            },
+            {
+                id: 113, name: 'Hemorróida / Fissura Anal', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Medidas comportamentais + sintomáticos.',
+                prescriptions: [
+                    { type: 'med', value: 'Hemorróida: Hidrocortisona + Cinchocaína tópico 3x/dia; medidas comportamentais (fibras, 2L água, ducha higiênica)' },
+                    { type: 'med', value: 'Fissura aguda: Lactulose 15 mL 12/12h; fibras + água; Hidrocortisona + Cinchocaína 3x/dia 5d' },
+                    { type: 'med', value: 'Fissura crônica: Idem aguda + Nitroglicerina 0,2% 3x/dia OU Diltiazem 2% tópico 2x/dia 8 semanas' }
+                ],
+                notes: ''
+            },
+            {
+                id: 114, name: 'Hipertensão - Tratamento Crônico', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Monoterapia inicial + MEV. Ajustar conforme comorbidades.',
+                prescriptions: [
+                    { type: 'med', value: 'Tiazídico: Hidroclorotiazida 25mg 1x/dia (não em gota/hiperparatireoidismo)' },
+                    { type: 'med', value: 'Betabloqueador: Propranolol 40mg 1x/dia OU Atenolol 100mg 1x/dia (não em DPOC/asma, claudicação, IC descompensada, BAV 2-3)' },
+                    { type: 'med', value: 'IECA: Captopril 25mg 12/12h (máx 50mg 8/8h) OU Enalapril 5mg 1x/dia (máx 40mg)' },
+                    { type: 'med', value: 'BRA: Losartana 25mg 12/12h (máx 50mg 12/12h)' },
+                    { type: 'med', value: 'Anlodipino 5mg 12/12h (10mg 12/12h). NÃO em IAM/AVE/angina/insuficiência' }
+                ],
+                notes: ''
+            },
+            {
+                id: 115, name: 'ICC - Manutenção', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Ajuste de VO conforme estágio (A/B/C/D).',
+                prescriptions: [
+                    { type: 'med', value: 'A: tratar fatores de risco; B: IECA/BRA + b-bloqueador; C: idem + diurético; D: idem + nitrato + digital' },
+                    { type: 'med', value: 'Medidas: restrição hídrica/sódio, peso diário, atividade física conforme tolerância' }
+                ],
+                notes: 'Pesquisar fatores de descompensação: má adesão, excesso água/sal, IAM, HAS, arritmias, infecções, TEP, AINEs.'
+            },
+            {
+                id: 116, name: 'ITU Baixa / ITU Gestação / Cólica Renal', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'ATB conforme tipo. Gestação: evitar quinolonas.',
+                prescriptions: [
+                    { type: 'med', value: 'ITU baixa: Nitrofurantoína 100mg 6/6h 5-7d OU Levofloxacino 250-500mg 1x/dia 3-5d OU Fosfomicina 3g dose única OU Norfloxacino 400mg 12/12h 5d' },
+                    { type: 'med', value: 'Dipirona 500mg 6/6h SOS; Fenazopiridina 100mg 8/8h 2d' },
+                    { type: 'med', value: 'ITU gestação: Ampicilina 500mg 6/6h 7-10d OU Cefalexina 500mg 6/6h 7-10d' },
+                    { type: 'med', value: 'Recorrente: Cefalexina 250mg 12/12h 7d OU Nitrofurantoína 100mg 12/12h 7d' },
+                    { type: 'med', value: 'Cólica renal: Tramadol 50mg 6/6h 3d; Paracetamol + Diclofenaco + Cafeína + Carisoprodol 8/8h 3d' }
+                ],
+                notes: 'Orientar retorno se dor persistente >7d, febre ou mal-estar.'
+            },
+            {
+                id: 117, name: 'IVAS (Resfriado / Gripe / Sinusite / Rinite)', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Sintomáticos + ATB em sinusite bacteriana.',
+                prescriptions: [
+                    { type: 'med', value: 'Lavagem nasal SF; Dipirona 500mg 6/6h OU Paracetamol 750mg 6/6h' },
+                    { type: 'med', value: 'Dipirona + Adifenina + Prometazina 1cp 8/8h OU Dipirona + Cafeína 8/8h OU Paracetamol + Fenilefrina + Carbinoxamina 1cp 6/6h (NÃO cardíacos)' },
+                    { type: 'med', value: 'Gripe: Diclofenaco 50mg 8/8h 3d OU Nimesulida 100mg 12/12h 3d OU Meloxicam 15mg 5d' },
+                    { type: 'med', value: 'Sinusite bacteriana: Amoxicilina 500mg 8/8h 14d' },
+                    { type: 'med', value: 'Rinite: Loratadina 10mg 1x/dia 10d OU Dexclorfeniramina 2mg 8/8h 10d; Budesonida nasal 2 jatos 12/12h 5d; Prednisolona 20mg manhã 5d' }
+                ],
+                notes: ''
+            },
+            {
+                id: 118, name: 'Lombalgias / Cervicalgias / Ciática', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'AINE + relaxante muscular + sintomáticos.',
+                prescriptions: [
+                    { type: 'med', value: 'Paracetamol + Diclofenaco + Cafeína + Carisoprodol 1cp 8/8h 3d' },
+                    { type: 'med', value: 'Meloxicam 15mg 1x/dia 5d; Paracetamol + Codeína 30mg 8/8h 5d' },
+                    { type: 'med', value: 'Ciclobenzaprina 10mg antes de dormir 5d (advertir sonolência)' }
+                ],
+                notes: ''
+            },
+            {
+                id: 119, name: 'Vertigem / Labirintite', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Antivertiginosos e sedativos vestibulares.',
+                prescriptions: [
+                    { type: 'med', value: 'Dimenidrato 100mg 6/6h 3d (ou 40 gts); Ondansetrona 8mg 12/12h SOS' },
+                    { type: 'med', value: 'Betaistidina 8mg 8/8h 10d; Cinarizina 75mg ao deitar 30d OU Flunarizina 10mg ao deitar 30d' }
+                ],
+                notes: ''
+            },
+            {
+                id: 120, name: 'Vômitos / Diarreia / Constipação', category: 'Ambulatório', specialty: 'Clínica Médica',
+                abordagemGeral: 'Sintomáticos + hidratação. Constipação: laxativos.',
+                prescriptions: [
+                    { type: 'med', value: 'Vômitos: Dimenidrato 100mg 6/6h 3d OU Ondansetrona 8mg 12/12h 5d OU Metoclopramida 10mg 8/8h OU Domperidona 10mg 8/8h' },
+                    { type: 'med', value: 'Diarreia: Saccharomyces boulardii 200mg 12/12h 5d; Escopolamina + Dipirona 40 gts 8/8h se cólica; SRO' },
+                    { type: 'med', value: 'Se febre/sangue/muco: Sulfametoxazol + Trimetoprima 800+160 12/12h 5d OU Ciprofloxacino 500mg 12/12h 7d' },
+                    { type: 'med', value: 'Constipação: Óleo mineral 1 colher 2x/dia 30d; Lactulose 10-40 mL até 3x/dia; Dioctil sulfossuccinato + Bisacodil 1-2 cp ao deitar; Bisacodil 2cp ao deitar' }
+                ],
+                notes: ''
+            },
+
+            // ==================== AMBULATÓRIO / CIRURGIA ====================
+            {
+                id: 121, name: 'Sutura / Mordedura de Cão / Epistaxe', category: 'Ambulatório', specialty: 'Cirurgia',
+                abordagemGeral: 'Limpeza, ATB profilático, vacinação antirrábica.',
+                prescriptions: [
+                    { type: 'med', value: 'Sutura: Cefalexina 500mg 6/6h 7d; AINE 3-5d; vacinar dT se >5 anos' },
+                    { type: 'med', value: 'Mordedura de cão: Sulfametoxazol + Trimetoprima 800+160 12/12h 7d OU Cefalexina 500mg 6/6h 7d' },
+                    { type: 'med', value: 'Vacinação antirrábica dias 0, 3, 7, 14, 28. Notificação' },
+                    { type: 'med', value: 'Epistaxe: comprimir base do nariz; compressas geladas OU Oximetazolina tópica; se não melhorar: tampões nasais' }
+                ],
+                notes: ''
+            },
+
+            // ==================== AMBULATÓRIO / GO ====================
+            {
+                id: 122, name: 'Cervicite / Uretrite / Vulvovaginites', category: 'Ambulatório', specialty: 'Ginecologia & Obstetrícia',
+                abordagemGeral: 'Tratar parceiro. Esquemas conforme agente.',
+                prescriptions: [
+                    { type: 'med', value: 'Gonorreia: Ceftriaxona 250mg IM dose única OU Ciprofloxacino 500mg VO dose única; + Azitromicina 1g VO dose única OU Doxiciclina 100mg 12/12h 7d' },
+                    { type: 'med', value: 'Vaginose: Metronidazol 500mg 12/12h 7d OU tópico 7d' },
+                    { type: 'med', value: 'Candidíase: Miconazol creme vaginal 7 noites OU Fluconazol 150mg VO dose única' },
+                    { type: 'med', value: 'Tricomoníase: Metronidazol 500mg 12/12h 7d OU tópico 7d. TRATAR PARCEIRO' }
+                ],
+                notes: 'Notificar parceiro.'
+            },
+            {
+                id: 123, name: 'Sangramento Vaginal / Úlceras Genitais', category: 'Ambulatório', specialty: 'Ginecologia & Obstetrícia',
+                abordagemGeral: 'Ácido Tranexâmico + Vitamina K. Úlceras: tratamento conforme agente.',
+                prescriptions: [
+                    { type: 'med', value: 'Sangramento: Ácido Mefenâmico 500mg 8/8h 3d; Ácido Tranexâmico 2cp 6/6h 3d; Meloxicam 15mg 1x/dia 5d' },
+                    { type: 'med', value: 'Sífilis: Penicilina Benzatina 2,4M UI IM (1ª dose; 2ª e 3ª semanal)' },
+                    { type: 'med', value: 'Herpes: Aciclovir 400mg 3x/dia 7-10d + sintomáticos' },
+                    { type: 'med', value: 'Donovanose: Doxiciclina 100mg 12/12h 21d. Cancro Mole: Azitromicina 1g dose única' },
+                    { type: 'med', value: 'Linfogranuloma: Doxiciclina 100mg 12/12h 21d' }
+                ],
+                notes: ''
+            },
+
+            // ==================== AMBULATÓRIO / PEDIATRIA ====================
+            {
+                id: 124, name: 'GECA / IVAS / Asma / Pneumonia / RCP Pediátrica', category: 'Ambulatório', specialty: 'Pediatria',
+                abordagemGeral: 'Manejo domiciliar pediátrico.',
+                prescriptions: [
+                    { type: 'note', value: 'GECA' },
+                    { type: 'med', value: 'SRO 1 env em 1L água; Soro caseiro; Ácido Nalidíxico 75 mg/kg/dia 4 tomadas 5d se disenteria' },
+                    { type: 'note', value: 'IVAS' },
+                    { type: 'med', value: 'Resfriado/Gripe: antitérmicos, hidratação, SF nasal; Sinusite: Amoxicilina 45-90 mg/kg/dia 3 doses 14-21d' },
+                    { type: 'med', value: 'Amigdalite: Penicilina V 125-250 mg 2-3x/dia 10d OU Amoxicilina 40 mg/kg/dia 3 doses; Azitromicina 3-5d' },
+                    { type: 'note', value: 'ASMA / BRONQUIOLITE' },
+                    { type: 'med', value: 'Asma: Salbutamol 100 mcg 2-3 jatos 4/4h SOS; Prednisona 1-2 mg/kg/dia VO 7d' },
+                    { type: 'med', value: 'Bronquiolite: Suporte. NÃO usar corticoide' },
+                    { type: 'note', value: 'PNEUMONIA' },
+                    { type: 'med', value: '2m-5a: Amoxicilina/Ampicilina 7-10d; >5a: Amoxicilina, Eritromicina, Azitromicina' },
+                    { type: 'note', value: 'RCP / ORIENTAÇÕES' },
+                    { type: 'med', value: 'RCP: C-A-B. Compressões 100-120/min. Lactente 4 cm; Criança 5 cm. Relação 30:2 / 15:2' }
+                ],
+                notes: 'Sinais de alerta: FR>60, batimento asa nariz, tiragem, pulso fino, TEC>2s, cianose/palidez, alteração consciência, ↓diurese.'
+            }
+        ];
+
+        let diseases = getStoredData('medidoc_diseases_v14', defaultDiseases);
+        diseases.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }));
+
+        let dilutions = getStoredData('medidoc_dilutions', [
+            { id: 1, name: 'Norepinefrina', concentration: '4 mg/mL (Ampola 4 mL)', infusion: 'Diluir 4 ampolas (16mL) em 234 mL SG5% (Total: 250mL). Concentração: 64 mcg/mL. Em BIC.', notes: 'Uso exclusivo em acesso venoso central.' },
+            { id: 2, name: 'Dobutamina', concentration: '12,5 mg/mL (Ampola 20 mL = 250 mg)', infusion: '80 mL + SF0,9% 170 mL (Total 250 mL). Concentração: 4 mg/mL. Em BIC.', notes: 'Dose 2-20 mcg/kg/min.' },
+            { id: 3, name: 'Nitroglicerina', concentration: '5 mg/mL (Ampola 10 mL)', infusion: '10 mL + SG5% 240 mL. Concentração: 200 mcg/mL. Em BIC.', notes: 'Dose 0,5-10 mcg/kg/min.' },
+            { id: 4, name: 'Nitroprussiato de Sódio', concentration: '50 mg/2mL', infusion: '2 mL + SG5% 248 mL. Concentração: 200 mcg/mL. Em BIC.', notes: 'Titular 2 mL/h cada 3-5 min. Máx 45 mL/h.' },
+            { id: 5, name: 'Vasopressina', concentration: '20 U/mL (Ampola 1 mL)', infusion: '1 mL + SF0,9% 100 mL. Concentração: 0,2 U/mL. Em BIC.', notes: 'Dose fixa 0,03 U/min = 9 mL/h.' },
+            { id: 6, name: 'Amiodarona', concentration: '150 mg/3mL (Ampola 3 mL)', infusion: 'Manutenção: 18 mL + SG5% 232 mL (3,6 mg/mL) a 16 mL/h 6h + 8 mL/h 18h.', notes: 'Uso em SG5%. Ataque: 3 mL + SG5% 100 mL EV 10-15 min.' }
+        ]);
+        dilutions.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' }));
+
+        const bsSpecialties = [
+            { name: 'Clínica Médica', icon: 'fa-stethoscope' },
+            { name: 'Cirurgia', icon: 'fa-syringe' },
+            { name: 'Ginecologia & Obstetrícia', icon: 'fa-person-pregnant' },
+            { name: 'Pediatria', icon: 'fa-baby' }
+        ];
+        const ambSpecialties = [
+            { name: 'Clínica Médica', icon: 'fa-stethoscope' },
+            { name: 'Cirurgia', icon: 'fa-syringe' },
+            { name: 'Ginecologia & Obstetrícia', icon: 'fa-person-pregnant' },
+            { name: 'Pediatria', icon: 'fa-baby' }
+        ];
+
+        function sortDiseases() {
+            diseases.sort((a, b) => 
+                (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' })
+            );
+        }
+
+        function sortDilutions() {
+            dilutions.sort((a, b) => 
+                (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' })
+            );
+        }
+
+        function saveData() {
+            localStorage.setItem('medidoc_diseases_v14', JSON.stringify(diseases));
+            localStorage.setItem('medidoc_dilutions', JSON.stringify(dilutions));
+        }
+
+        function switchTab(tab) {
+            if (activeTab === tab && currentView === 'main') return;
+            activeTab = tab;
+            currentView = 'main';
+            detailDiseaseId = null;
+            detailDilutionId = null;
+            pushHistory();
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function openSpecialtyList(category, specialty) {
+            selectedCategory = { category, specialty };
+            currentView = 'specialty-list'; detailDiseaseId = null;
+            pushHistory();
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function openDiseaseDetail(id, from = 'specialty-list') {
+            detailDiseaseId = id; previousView = from; currentView = 'disease-detail';
+            pushHistory();
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function openDilutionDetail(id) {
+            detailDilutionId = id;
+            previousView = 'diluicoes-list';
+            currentView = 'dilution-detail';
+            pushHistory();
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function startQuickAdd() {
+            currentView = 'quick-add'; selectedCategory = null; editingId = null;
+            pushHistory();
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function startDiseaseFromHome(category, specialty) {
+            activeTab = 'doencas';
+            openDiseaseForm(category, specialty);
+        }
+        function openDiseaseForm(category, specialty, id = null) {
+            selectedCategory = { category, specialty }; editingId = id; currentView = 'form-doenca';
+            pushHistory();
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function openDilutionForm(id = null) {
+            editingId = id;
+            currentView = 'form-diluicao';
+            pushHistory();
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function goBackToMain() { history.back(); }
+        function goBackFromDetail() { history.back(); }
+
+        function renderQuickAdd(container) {
+            const renderGroup = (title, icon, colorClass, specialties, category) => `
+                <div class="bg-slate-900/60 backdrop-blur-xl rounded-3xl p-5 shadow-lg shadow-black/30 border border-slate-800">
+                    <div class="flex items-center space-x-3 pb-4 border-b border-slate-800 mb-3">
+                        <div class="w-10 h-10 ${colorClass} rounded-xl flex items-center justify-center text-lg"><i class="fa-solid ${icon}"></i></div>
+                        <h3 class="font-extrabold text-base text-slate-100 tracking-wide">${title}</h3>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2">
+                        ${specialties.map(spec => `
+                            <button onclick="startDiseaseFromHome('${category}', '${spec.name}')" class="w-full flex items-center p-3 rounded-2xl hover:bg-slate-800/70 text-left transition border border-transparent">
+                                <div class="w-10 h-10 ${colorClass} rounded-full flex items-center justify-center mr-3 shadow-inner"><i class="fa-solid ${spec.icon}"></i></div>
+                                <span class="flex-1 text-sm font-semibold text-slate-200">${spec.name}</span>
+                                <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>`;
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex items-center space-x-4">
+                        <button onclick="goBackToMain()" class="w-10 h-10 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center text-slate-300 shadow-sm"><i class="fa-solid fa-arrow-left"></i></button>
+                        <div><h2 class="font-bold text-slate-100 text-xl leading-tight">Adicionar Doença</h2><p class="text-xs text-violet-400 font-bold uppercase tracking-wider">Escolha a especialidade</p></div>
+                    </div>
+                    ${renderGroup('Banco de Socorro (BS)', 'fa-kit-medical', 'bg-red-500/10 text-red-400', bsSpecialties, 'Banco de Socorro')}
+                    ${renderGroup('Ambulatório', 'fa-hospital-user', 'bg-blue-500/10 text-blue-400', ambSpecialties, 'Ambulatório')}
+                </div>`;
+        }
+
+        function render() {
+            ['home', 'doencas', 'diluicoes', 'pesquisar', 'sobre'].forEach(t => {
+                const btn = document.getElementById(`nav-${t}`);
+                if (btn) btn.className = (t === activeTab && currentView === 'main')
+                    ? "flex flex-col items-center justify-center w-full h-full text-blue-400 transition-colors"
+                    : "flex flex-col items-center justify-center w-full h-full text-slate-500 hover:text-blue-400 transition-colors";
+            });
+
+            const container = document.getElementById('main-content');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (currentView === 'disease-detail') { renderDiseaseDetail(container); return; }
+            if (currentView === 'dilution-detail') { renderDilutionDetail(container); return; }
+
+            if (activeTab === 'home') renderHome(container);
+            else if (activeTab === 'doencas') renderDoencas(container);
+            else if (activeTab === 'diluicoes') renderDiluicoes(container);
+            else if (activeTab === 'pesquisar') renderPesquisar(container);
+            else if (activeTab === 'sobre') renderSobre(container);
+        }
+
+        function renderDiseaseDetail(container) {
+            const d = diseases.find(x => x.id === detailDiseaseId);
+            if (!d) { renderDoencas(container); return; }
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="flex items-center space-x-4">
+                        <button onclick="goBackFromDetail()" class="w-10 h-10 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center text-slate-300 shadow-sm"><i class="fa-solid fa-arrow-left"></i></button>
+                        <div class="flex-1 min-w-0">
+                            <h2 class="font-bold text-slate-100 text-lg leading-tight">${d.name}</h2>
+                            <p class="text-[10px] text-blue-400 font-bold uppercase tracking-wider mt-0.5">${d.specialty} • ${d.category}</p>
+                        </div>
+                        <button onclick="openDiseaseForm('${d.category}', '${d.specialty}', ${d.id})" class="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30"><i class="fa-solid fa-pen text-sm"></i></button>
+                    </div>
+
+                    ${d.abordagemGeral ? `
+                    <div class="bg-blue-500/10 p-4 rounded-2xl border border-blue-500/20 backdrop-blur">
+                        <div class="text-[10px] font-extrabold text-blue-300 uppercase tracking-widest mb-1.5 flex items-center"><i class="fa-solid fa-user-doctor mr-1.5"></i> Abordagem Geral</div>
+                        <p class="text-sm text-slate-300 leading-relaxed">${d.abordagemGeral}</p>
+                    </div>` : ''}
+
+                    <div class="bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20 backdrop-blur">
+                        <div class="text-[10px] font-extrabold text-emerald-300 uppercase tracking-wider flex items-center pb-2 border-b border-emerald-500/20 mb-2">
+                            <i class="fa-solid fa-file-prescription mr-1.5 text-emerald-400"></i> Prescrição
+                        </div>
+                        ${d.prescriptions && d.prescriptions.length > 0 ? `
+                            <ul class="space-y-1.5">
+                                ${d.prescriptions.map(p => {
+                                    const isObj = typeof p === 'object' && p !== null;
+                                    const type = isObj ? p.type : 'med';
+                                    const val = isObj ? p.value : p;
+                                    if (!val) return '';
+                                    if (type === 'note') return `<li class="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-300 flex items-center my-1"><i class="fa-solid fa-info-circle mr-2 text-emerald-400"></i><span>${val}</span></li>`;
+                                    return `<li class="flex items-start text-xs sm:text-sm text-slate-200 font-medium bg-slate-900/70 p-2.5 rounded-lg border border-emerald-500/20"><i class="fa-solid fa-pills text-emerald-400 text-xs mt-0.5 mr-2"></i><span class="flex-1">${val}</span></li>`;
+                                }).join('')}
+                            </ul>
+                        ` : '<p class="text-xs text-slate-500 italic">Nenhum tratamento cadastrado.</p>'}
+                    </div>
+
+                    ${d.notes ? `
+                    <div class="bg-amber-500/10 p-4 rounded-2xl border border-amber-500/20 backdrop-blur">
+                        <div class="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider flex items-center pb-1.5 mb-1.5">
+                            <i class="fa-solid fa-note-sticky mr-1.5 text-amber-400"></i> Anotações Gerais
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed whitespace-pre-line">${d.notes}</p>
+                    </div>` : ''}
+                </div>`;
+        }
+
+        function renderDilutionDetail(container) {
+            const d = dilutions.find(x => x.id === detailDilutionId);
+            if (!d) { renderDiluicoes(container); return; }
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="flex items-center space-x-4">
+                        <button onclick="goBackFromDetail()" class="w-10 h-10 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center text-slate-300 shadow-sm"><i class="fa-solid fa-arrow-left"></i></button>
+                        <div class="flex-1 min-w-0">
+                            <h2 class="font-bold text-slate-100 text-lg leading-tight">${d.name}</h2>
+                            <p class="text-[10px] text-emerald-400 font-bold uppercase tracking-wider mt-0.5">Diluição • Infusão</p>
+                        </div>
+                        <button onclick="openDilutionForm(${d.id})" class="w-10 h-10 bg-emerald-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30"><i class="fa-solid fa-pen text-sm"></i></button>
+                    </div>
+
+                    <div class="bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20 backdrop-blur">
+                        <div class="text-[10px] font-extrabold text-emerald-300 uppercase tracking-wider mb-1.5 flex items-center">
+                            <i class="fa-solid fa-vial mr-1.5"></i> Apresentação / Concentração
+                        </div>
+                        <p class="text-sm font-semibold text-emerald-300">${d.concentration}</p>
+                    </div>
+
+                    <div class="bg-blue-500/10 p-4 rounded-2xl border border-blue-500/20 backdrop-blur">
+                        <div class="text-[10px] font-extrabold text-blue-300 uppercase tracking-wider mb-1.5 flex items-center">
+                            <i class="fa-solid fa-syringe mr-1.5"></i> Preparo / Infusão
+                        </div>
+                        <p class="text-sm text-slate-300 leading-relaxed whitespace-pre-line">${d.infusion}</p>
+                    </div>
+
+                    ${d.notes ? `
+                    <div class="bg-amber-500/10 p-4 rounded-2xl border border-amber-500/20 backdrop-blur">
+                        <div class="text-[10px] font-extrabold text-amber-300 uppercase tracking-wider mb-1.5 flex items-center">
+                            <i class="fa-solid fa-triangle-exclamation mr-1.5"></i> Notas Importantes
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed whitespace-pre-line">${d.notes}</p>
+                    </div>` : ''}
+                </div>`;
+        }
+
+        function renderHome(container) {
+            if (currentView === 'quick-add') { renderQuickAdd(container); return; }
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div>
+                        <h3 class="font-bold text-slate-500 text-xs uppercase tracking-widest mb-4 ml-1">Acesso Rápido</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <button onclick="switchTab('doencas')" class="bg-slate-900/60 backdrop-blur-xl p-5 rounded-3xl shadow-lg shadow-black/30 border border-slate-800 flex items-center space-x-5 text-left hover:border-blue-500/50 transition group">
+                                <div class="w-14 h-14 bg-blue-500/10 text-blue-400 rounded-2xl flex items-center justify-center text-2xl group-hover:bg-blue-600 group-hover:text-white transition"><i class="fa-solid fa-book-medical"></i></div>
+                                <div><span class="font-bold text-slate-100 block mb-0.5">Protocolos Clínicos</span><span class="text-xs text-slate-400 font-medium">Banco de Socorro e Ambulatório</span></div>
+                            </button>
+                            <button onclick="switchTab('diluicoes')" class="bg-slate-900/60 backdrop-blur-xl p-5 rounded-3xl shadow-lg shadow-black/30 border border-slate-800 flex items-center space-x-5 text-left hover:border-emerald-500/50 transition group">
+                                <div class="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center text-2xl group-hover:bg-emerald-600 group-hover:text-white transition"><i class="fa-solid fa-flask"></i></div>
+                                <div><span class="font-bold text-slate-100 block mb-0.5">Diluições</span><span class="text-xs text-slate-400 font-medium">Guias de infusão</span></div>
+                            </button>
+                            <button onclick="startQuickAdd()" class="bg-slate-900/60 backdrop-blur-xl p-5 rounded-3xl shadow-lg shadow-black/30 border border-slate-800 flex items-center space-x-5 text-left hover:border-violet-500/50 transition group sm:col-span-2">
+                                <div class="w-14 h-14 bg-violet-500/10 text-violet-400 rounded-2xl flex items-center justify-center text-2xl group-hover:bg-violet-600 group-hover:text-white transition"><i class="fa-solid fa-plus"></i></div>
+                                <div><span class="font-bold text-slate-100 block mb-0.5">Adicionar Doença</span><span class="text-xs text-slate-400 font-medium">Cadastrar novo protocolo</span></div>
+                                <i class="fa-solid fa-chevron-right text-xs text-slate-500 ml-auto"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function renderDoencas(container) {
+            if (currentView === 'specialty-list') {
+                const { category, specialty } = selectedCategory;
+                const filtered = diseases.filter(d => d.category === category && d.specialty === specialty);
+                container.innerHTML = `
+                    <div class="space-y-5">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                <button onclick="goBackToMain()" class="w-10 h-10 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center text-slate-300 shadow-sm"><i class="fa-solid fa-arrow-left"></i></button>
+                                <div><h2 class="font-bold text-slate-100 text-xl leading-tight">${specialty}</h2><p class="text-xs text-blue-400 font-bold uppercase tracking-wider">${category}</p></div>
+                            </div>
+                            <button onclick="openDiseaseForm('${category}', '${specialty}')" class="bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                        <div class="space-y-2">
+                            ${filtered.length === 0 ? `
+                                <div class="text-center py-16 bg-slate-900/40 rounded-3xl border border-dashed border-slate-800">
+                                    <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-500 text-2xl"><i class="fa-solid fa-folder-open"></i></div>
+                                    <p class="text-sm text-slate-400">Nenhum protocolo cadastrado.</p>
+                                    <button onclick="openDiseaseForm('${category}', '${specialty}')" class="mt-3 text-blue-400 text-sm font-bold">Adicionar agora</button>
+                                </div>
+                            ` : filtered.map(d => `
+                                <button onclick="openDiseaseDetail(${d.id}, 'specialty-list')" class="w-full bg-slate-900/60 backdrop-blur rounded-xl border border-slate-800 px-3 py-2.5 flex items-center justify-between hover:bg-slate-800/60 hover:border-blue-500/50 transition group text-left">
+                                    <div class="flex items-center space-x-2.5 min-w-0 flex-1">
+                                        <div class="w-6 h-6 bg-blue-500/10 text-blue-400 rounded-lg flex items-center justify-center shrink-0">
+                                            <i class="fa-solid fa-disease text-[10px]"></i>
+                                        </div>
+                                        <span class="text-sm font-semibold text-slate-100 truncate">${d.name}</span>
+                                    </div>
+                                    <i class="fa-solid fa-chevron-right text-[10px] text-slate-500 group-hover:text-blue-400 ml-2 shrink-0"></i>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>`;
+                return;
+            }
+            if (currentView === 'form-doenca') {
+                const item = editingId ? diseases.find(d => d.id === editingId) : { category: selectedCategory.category, specialty: selectedCategory.specialty, name: '', abordagemGeral: '', prescriptions: [{ type: 'med', value: '' }], notes: '' };
+                if (!item.prescriptions || item.prescriptions.length === 0) item.prescriptions = [{ type: 'med', value: '' }];
+                container.innerHTML = `
+                    <div class="space-y-5">
+                        <div class="flex items-center space-x-4">
+                            <button onclick="goBackToMain()" class="w-10 h-10 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center text-slate-300 shadow-sm"><i class="fa-solid fa-arrow-left"></i></button>
+                            <h2 class="font-bold text-slate-100 text-xl">${editingId ? 'Editar Protocolo' : 'Novo Protocolo'}</h2>
+                        </div>
+                        <form onsubmit="saveDisease(event)" class="space-y-4">
+                            <div class="bg-slate-900/60 backdrop-blur-xl p-5 rounded-3xl shadow-lg shadow-black/30 border border-slate-800">
+                                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Diagnóstico / Doença *</label>
+                                <input type="text" id="f-name" required value="${item.name || ''}" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-base font-semibold text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div class="bg-slate-900/60 backdrop-blur-xl p-5 rounded-3xl shadow-lg shadow-black/30 border border-slate-800">
+                                <label class="block text-xs font-bold text-blue-400 uppercase tracking-wider mb-2"><i class="fa-solid fa-user-doctor mr-1"></i> Abordagem Geral</label>
+                                <textarea id="f-abordagem" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">${item.abordagemGeral || ''}</textarea>
+                            </div>
+                            <div class="bg-slate-900/60 backdrop-blur-xl p-5 rounded-3xl shadow-lg shadow-black/30 border border-emerald-500/30 space-y-4">
+                                <div class="flex items-center justify-between pb-2 border-b border-emerald-500/20">
+                                    <h3 class="font-extrabold text-emerald-300 text-base flex items-center"><i class="fa-solid fa-file-prescription mr-2 text-emerald-400"></i> Prescrição</h3>
+                                </div>
+                                <div id="prescriptions-container" class="space-y-3">
+                                    ${item.prescriptions.map((p) => {
+                                        const isObj = typeof p === 'object' && p !== null;
+                                        const type = isObj ? p.type : 'med';
+                                        const val = isObj ? p.value : p;
+                                        return type === 'note' ? getPrescriptionNoteHTML(val) : getPrescriptionInputHTML(val);
+                                    }).join('')}
+                                </div>
+                                <div class="flex flex-col sm:flex-row gap-2 pt-2">
+                                    <button type="button" onclick="addPrescriptionNoteField()" class="flex-1 py-3 bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 rounded-2xl text-xs font-bold flex items-center justify-center"><i class="fa-solid fa-comment-medical mr-1.5"></i> Divisor / Anotação</button>
+                                    <button type="button" onclick="addPrescriptionField()" class="flex-1 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-bold flex items-center justify-center shadow-lg shadow-emerald-500/20"><i class="fa-solid fa-plus mr-1.5"></i> Medicamento</button>
+                                </div>
+                            </div>
+                            <div class="bg-slate-900/60 backdrop-blur-xl p-5 rounded-3xl shadow-lg shadow-black/30 border border-amber-500/30 space-y-3">
+                                <div class="flex items-center justify-between pb-2 border-b border-amber-500/20">
+                                    <h3 class="font-extrabold text-amber-300 text-base flex items-center"><i class="fa-solid fa-note-sticky mr-2 text-amber-400"></i> Anotações Gerais</h3>
+                                </div>
+                                <textarea id="f-notes" rows="3" class="w-full bg-slate-950 border border-amber-500/20 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500">${item.notes || ''}</textarea>
+                            </div>
+                            <div class="flex space-x-3 pt-4">
+                                <button type="submit" class="flex-1 bg-blue-600 text-white font-bold py-4 rounded-2xl text-sm shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition">Salvar Protocolo</button>
+                                ${editingId ? `<button type="button" onclick="deleteDisease(${editingId})" class="bg-red-500/10 text-red-400 px-6 py-4 rounded-2xl text-sm font-bold border border-red-500/20"><i class="fa-solid fa-trash"></i></button>` : ''}
+                            </div>
+                        </form>
+                    </div>`;
+                return;
+            }
+            const specialtyIcons = {
+                'Clínica Médica': { icon: 'fa-stethoscope', color: 'bg-blue-500/10 text-blue-400' },
+                'Cirurgia': { icon: 'fa-syringe', color: 'bg-emerald-500/10 text-emerald-400' },
+                'Ginecologia & Obstetrícia': { icon: 'fa-person-pregnant', color: 'bg-pink-500/10 text-pink-400' },
+                'Pediatria': { icon: 'fa-baby', color: 'bg-violet-500/10 text-violet-400' }
+            };
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="bg-slate-900/60 backdrop-blur-xl rounded-3xl p-5 shadow-lg shadow-black/30 border border-slate-800">
+                        <div class="flex items-center space-x-3 pb-4 border-b border-slate-800 mb-3">
+                            <div class="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center text-red-400 text-lg"><i class="fa-solid fa-kit-medical"></i></div>
+                            <h3 class="font-extrabold text-base text-slate-100 tracking-wide">Banco de Socorro (BS)</h3>
+                        </div>
+                        <div class="grid grid-cols-1 gap-2">
+                            ${bsSpecialties.map(spec => {
+                                const iconData = specialtyIcons[spec.name] || { icon: spec.icon, color: 'bg-red-500/10 text-red-400' };
+                                const count = diseases.filter(d => d.category === 'Banco de Socorro' && d.specialty === spec.name).length;
+                                return `<button onclick="openSpecialtyList('Banco de Socorro', '${spec.name}')" class="w-full flex items-center p-3 rounded-2xl hover:bg-slate-800/60 text-left transition">
+                                    <div class="w-10 h-10 ${iconData.color} rounded-full flex items-center justify-center mr-3 shadow-inner"><i class="fa-solid ${iconData.icon}"></i></div>
+                                    <div class="flex-1 min-w-0">
+                                        <span class="block text-sm font-semibold text-slate-200">${spec.name}</span>
+                                        <span class="block text-[10px] text-slate-500 font-medium">${count} protocolo${count !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+                                </button>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                    <div class="bg-slate-900/60 backdrop-blur-xl rounded-3xl p-5 shadow-lg shadow-black/30 border border-slate-800">
+                        <div class="flex items-center space-x-3 pb-4 border-b border-slate-800 mb-3">
+                            <div class="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 text-lg"><i class="fa-solid fa-hospital-user"></i></div>
+                            <h3 class="font-extrabold text-base text-slate-100 tracking-wide">Ambulatório</h3>
+                        </div>
+                        <div class="grid grid-cols-1 gap-2">
+                            ${ambSpecialties.map(spec => {
+                                const iconData = specialtyIcons[spec.name] || { icon: spec.icon, color: 'bg-blue-500/10 text-blue-400' };
+                                const count = diseases.filter(d => d.category === 'Ambulatório' && d.specialty === spec.name).length;
+                                return `<button onclick="openSpecialtyList('Ambulatório', '${spec.name}')" class="w-full flex items-center p-3 rounded-2xl hover:bg-slate-800/60 text-left transition">
+                                    <div class="w-10 h-10 ${iconData.color} rounded-full flex items-center justify-center mr-3 shadow-inner"><i class="fa-solid ${iconData.icon}"></i></div>
+                                    <div class="flex-1 min-w-0">
+                                        <span class="block text-sm font-semibold text-slate-200">${spec.name}</span>
+                                        <span class="block text-[10px] text-slate-500 font-medium">${count} protocolo${count !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    <i class="fa-solid fa-chevron-right text-xs text-slate-500"></i>
+                                </button>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function getPrescriptionInputHTML(value = '') {
+            return `<div class="prescription-row p-item flex items-center space-x-2" data-type="med"><input type="text" class="p-line flex-1 bg-slate-950 border border-emerald-500/30 rounded-xl p-3 text-sm font-medium text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm" value="${value}" placeholder="Ex: Dipirona 500mg/mL - 2 mL + 18 mL AD EV 6/6h"><button type="button" onclick="removePrescriptionField(this)" class="w-10 h-10 bg-red-500/10 text-red-500 rounded-xl flex items-center justify-center shrink-0"><i class="fa-solid fa-xmark"></i></button></div>`;
+        }
+        function getPrescriptionNoteHTML(value = '') {
+            return `<div class="prescription-row p-item flex items-center space-x-2" data-type="note"><div class="flex-1 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-2 flex items-center space-x-2"><i class="fa-solid fa-info-circle text-emerald-400 ml-1"></i><input type="text" class="p-line w-full bg-transparent text-xs font-bold text-emerald-300 focus:outline-none" value="${value}" placeholder="Ex: Se não reverter após 30 min:"></div><button type="button" onclick="removePrescriptionField(this)" class="w-10 h-10 bg-red-500/10 text-red-500 rounded-xl flex items-center justify-center shrink-0"><i class="fa-solid fa-xmark"></i></button></div>`;
+        }
+        function addPrescriptionField() { const c = document.getElementById('prescriptions-container'); if (!c) return; const d = document.createElement('div'); d.innerHTML = getPrescriptionInputHTML(''); c.appendChild(d.firstElementChild); }
+        function addPrescriptionNoteField() { const c = document.getElementById('prescriptions-container'); if (!c) return; const d = document.createElement('div'); d.innerHTML = getPrescriptionNoteHTML(''); c.appendChild(d.firstElementChild); }
+        function removePrescriptionField(btn) { const c = document.getElementById('prescriptions-container'); const rows = c.querySelectorAll('.prescription-row'); if (rows.length <= 1) { alert('A prescrição deve conter pelo menos um item.'); return; } btn.closest('.prescription-row').remove(); }
+
+        function saveDisease(e) {
+            e.preventDefault();
+            const name = document.getElementById('f-name').value;
+            const abordagemGeral = document.getElementById('f-abordagem').value;
+            const notes = document.getElementById('f-notes').value;
+            const items = document.querySelectorAll('.p-item');
+            const prescriptions = [];
+            items.forEach(item => { const type = item.getAttribute('data-type'); const input = item.querySelector('.p-line'); if (input && input.value.trim()) prescriptions.push({ type, value: input.value.trim() }); });
+            const newData = { name, abordagemGeral, prescriptions, notes };
+            if (editingId) diseases = diseases.map(d => d.id === editingId ? { ...d, ...newData } : d);
+            else { const newId = diseases.length > 0 ? Math.max(...diseases.map(d => d.id)) + 1 : 1; diseases.push({ id: newId, category: selectedCategory.category, specialty: selectedCategory.specialty, ...newData }); }
+            
+            sortDiseases();
+            
+            saveData();
+            if (editingId) { currentView = 'disease-detail'; detailDiseaseId = editingId; } else { currentView = 'specialty-list'; }
+            editingId = null;
+            history.replaceState(getCurrentState(), '', '');
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function deleteDisease(id) {
+            if (confirm('Deseja realmente excluir este protocolo?')) {
+                diseases = diseases.filter(d => d.id !== id);
+                saveData();
+                detailDiseaseId = null; editingId = null;
+                currentView = 'specialty-list';
+                history.replaceState(getCurrentState(), '', '');
+                render();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        function renderDiluicoes(container) {
+            if (currentView === 'form-diluicao') {
+                const item = editingId ? dilutions.find(d => d.id === editingId) : { name: '', concentration: '', infusion: '', notes: '' };
+                container.innerHTML = `
+                    <div class="space-y-5">
+                        <div class="flex items-center space-x-4">
+                            <button onclick="goBackToMain()" class="w-10 h-10 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center text-slate-300 shadow-sm"><i class="fa-solid fa-arrow-left"></i></button>
+                            <h2 class="font-bold text-slate-100 text-xl">${editingId ? 'Editar Diluição' : 'Nova Diluição'}</h2>
+                        </div>
+                        <form onsubmit="saveDilution(event)" class="bg-slate-900/60 backdrop-blur-xl p-6 rounded-3xl shadow-lg shadow-black/30 border border-slate-800 space-y-5">
+                            <div><label class="block text-xs font-bold text-slate-400 uppercase mb-2">Medicamento *</label><input type="text" id="d-name" required value="${item.name || ''}" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-base font-bold text-slate-100"></div>
+                            <div><label class="block text-xs font-bold text-slate-400 uppercase mb-2">Concentração *</label><input type="text" id="d-conc" required value="${item.concentration || ''}" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100"></div>
+                            <div><label class="block text-xs font-bold text-slate-400 uppercase mb-2">Preparo e Infusão *</label><textarea id="d-inf" rows="4" required class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100">${item.infusion || ''}</textarea></div>
+                            <div><label class="block text-xs font-bold text-amber-400 uppercase mb-2">Notas</label><textarea id="d-notes" rows="2" class="w-full bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-sm text-slate-100">${item.notes || ''}</textarea></div>
+                            <div class="flex space-x-3 pt-2">
+                                <button type="submit" class="flex-1 bg-emerald-600 text-white font-bold py-4 rounded-2xl text-sm shadow-lg shadow-emerald-500/30 hover:bg-emerald-700 transition">Salvar Diluição</button>
+                                ${editingId ? `<button type="button" onclick="deleteDilution(${editingId})" class="bg-red-500/10 text-red-400 px-6 py-4 rounded-2xl text-sm font-bold border border-red-500/20"><i class="fa-solid fa-trash"></i></button>` : ''}
+                            </div>
+                        </form>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h2 class="font-bold text-slate-100 text-2xl">Diluições</h2>
+                        <button onclick="openDilutionForm()" class="bg-emerald-600 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                    <div class="space-y-2">
+                        ${dilutions.length === 0 ? `
+                            <div class="text-center py-16 bg-slate-900/40 rounded-3xl border border-dashed border-slate-800">
+                                <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-500 text-2xl"><i class="fa-solid fa-flask"></i></div>
+                                <p class="text-sm text-slate-400">Nenhuma diluição cadastrada.</p>
+                                <button onclick="openDilutionForm()" class="mt-3 text-emerald-400 text-sm font-bold">Adicionar agora</button>
+                            </div>
+                        ` : dilutions.map(d => `
+                            <button onclick="openDilutionDetail(${d.id})" class="w-full bg-slate-900/60 backdrop-blur-xl rounded-2xl shadow-lg shadow-black/30 border border-slate-800 px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800/60 hover:border-emerald-500/50 transition group">
+                                <div class="flex items-center space-x-3 min-w-0 flex-1">
+                                    <div class="w-8 h-8 bg-emerald-500/10 text-emerald-400 rounded-lg flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-flask text-xs"></i>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h3 class="font-bold text-slate-100 text-sm truncate">${d.name}</h3>
+                                        <p class="text-[10px] text-slate-400 font-medium truncate">${d.concentration}</p>
+                                    </div>
+                                </div>
+                                <i class="fa-solid fa-chevron-right text-xs text-slate-500 group-hover:text-emerald-400 transition"></i>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>`;
+        }
+        function saveDilution(e) {
+            e.preventDefault();
+            const name = document.getElementById('d-name').value;
+            const concentration = document.getElementById('d-conc').value;
+            const infusion = document.getElementById('d-inf').value;
+            const notes = document.getElementById('d-notes').value;
+            if (editingId) dilutions = dilutions.map(d => d.id === editingId ? { ...d, name, concentration, infusion, notes } : d);
+            else dilutions.push({ id: dilutions.length > 0 ? Math.max(...dilutions.map(d => d.id)) + 1 : 1, name, concentration, infusion, notes });
+
+            sortDilutions();
+            saveData();
+            currentView = 'main';
+            detailDilutionId = null;
+            history.replaceState(getCurrentState(), '', '');
+            render();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        function deleteDilution(id) {
+            if (confirm('Deseja excluir esta diluição?')) {
+                dilutions = dilutions.filter(d => d.id !== id);
+                saveData();
+                detailDilutionId = null;
+                currentView = 'main';
+                history.replaceState(getCurrentState(), '', '');
+                render();
+            }
+        }
+
+        function renderPesquisar(container) {
+            const query = searchQuery.trim().toLowerCase();
+            const filteredDiseases = query ? diseases.filter(d =>
+                (d.name && d.name.toLowerCase().includes(query)) ||
+                (d.specialty && d.specialty.toLowerCase().includes(query)) ||
+                (d.category && d.category.toLowerCase().includes(query)) ||
+                (d.notes && d.notes.toLowerCase().includes(query)) ||
+                (d.abordagemGeral && d.abordagemGeral.toLowerCase().includes(query)) ||
+                (d.prescriptions && d.prescriptions.some(p => { const val = typeof p === 'object' ? p.value : p; return val && val.toLowerCase().includes(query); }))
+            ) : [];
+            const filteredDilutions = query ? dilutions.filter(d =>
+                (d.name && d.name.toLowerCase().includes(query)) ||
+                (d.concentration && d.concentration.toLowerCase().includes(query)) ||
+                (d.infusion && d.infusion.toLowerCase().includes(query))
+            ) : [];
+            const totalResults = filteredDiseases.length + filteredDilutions.length;
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <h2 class="font-bold text-slate-100 text-2xl">Pesquisar</h2>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500"><i class="fa-solid fa-magnifying-glass"></i></div>
+                        <input type="text" id="search-input" value="${searchQuery}" oninput="handleSearch(event)" placeholder="Buscar por doença, medicamento, especialidade..." class="w-full pl-11 pr-10 py-3.5 bg-slate-900/60 backdrop-blur border border-slate-800 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-lg shadow-black/30 text-slate-100 placeholder-slate-500">
+                        ${searchQuery ? `<button onclick="clearSearch()" class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-500 hover:text-slate-300"><i class="fa-solid fa-xmark"></i></button>` : ''}
+                    </div>
+                    ${!query ? `<div class="text-center py-12 text-slate-600"><i class="fa-solid fa-magnifying-glass text-4xl mb-3 block opacity-30"></i><p class="text-sm">Digite acima para buscar em todos os protocolos e diluições.</p></div>`
+                    : totalResults === 0 ? `<div class="text-center py-12 bg-slate-900/40 rounded-3xl border border-dashed border-slate-800"><i class="fa-solid fa-face-frown text-4xl text-slate-700 mb-3 block"></i><p class="text-sm text-slate-400">Nenhum resultado para "<span class="font-bold text-slate-200">${searchQuery}</span>".</p></div>`
+                    : `<div class="space-y-6">
+                        ${filteredDiseases.length > 0 ? `<div>
+                            <h3 class="font-bold text-xs uppercase tracking-widest text-slate-500 mb-3 ml-1 flex items-center"><i class="fa-solid fa-book-medical mr-2 text-blue-400"></i> Doenças e Condutas (${filteredDiseases.length})</h3>
+                            <div class="space-y-2">
+                                ${filteredDiseases.map(d => `
+                                    <button onclick="openDiseaseDetail(${d.id}, 'search')" class="w-full bg-slate-900/60 backdrop-blur rounded-xl border border-slate-800 px-3 py-2.5 flex items-center justify-between hover:bg-slate-800/60 hover:border-blue-500/50 transition group text-left">
+                                        <div class="flex items-center space-x-2.5 min-w-0 flex-1">
+                                            <div class="w-6 h-6 bg-blue-500/10 text-blue-400 rounded-lg flex items-center justify-center shrink-0">
+                                                <i class="fa-solid fa-disease text-[10px]"></i>
+                                            </div>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="text-sm font-semibold text-slate-100 truncate">${d.name}</p>
+                                                <p class="text-[9px] text-blue-400 font-bold uppercase tracking-wider">${d.specialty} • ${d.category}</p>
+                                            </div>
+                                        </div>
+                                        <i class="fa-solid fa-chevron-right text-[10px] text-slate-500 group-hover:text-blue-400 ml-2 shrink-0"></i>
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>` : ''}
+                        ${filteredDilutions.length > 0 ? `<div>
+                            <h3 class="font-bold text-xs uppercase tracking-widest text-slate-500 mb-3 ml-1 flex items-center"><i class="fa-solid fa-flask mr-2 text-emerald-400"></i> Diluições (${filteredDilutions.length})</h3>
+                            <div class="space-y-2">
+                                ${filteredDilutions.map(d => `
+                                    <button onclick="openDilutionDetail(${d.id})" class="w-full bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-800 px-4 py-3 flex items-center justify-between text-left hover:border-emerald-500/50 transition group">
+                                        <div class="flex items-center space-x-3 min-w-0 flex-1">
+                                            <div class="w-8 h-8 bg-emerald-500/10 text-emerald-400 rounded-lg flex items-center justify-center shrink-0">
+                                                <i class="fa-solid fa-flask text-xs"></i>
+                                            </div>
+                                            <div class="min-w-0 flex-1">
+                                                <h4 class="font-bold text-slate-100 text-sm truncate">${d.name}</h4>
+                                                <p class="text-[10px] text-slate-400 font-medium truncate">${d.concentration}</p>
+                                            </div>
+                                        </div>
+                                        <i class="fa-solid fa-chevron-right text-xs text-slate-500 group-hover:text-emerald-400 ml-2 shrink-0"></i>
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>` : ''}
+                    </div>`}
+                </div>`;
+        }
+        function handleSearch(e) { searchQuery = e.target.value; renderPesquisar(document.getElementById('main-content')); const input = document.getElementById('search-input'); if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); } }
+        function clearSearch() { searchQuery = ''; renderPesquisar(document.getElementById('main-content')); }
+
+        function renderSobre(container) {
+            container.innerHTML = `
+                <div class="space-y-6 text-center py-8">
+                    <div class="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-[2rem] flex items-center justify-center text-4xl mx-auto shadow-xl shadow-blue-500/20"><i class="fa-solid fa-stethoscope"></i></div>
+                    <div><h2 class="font-extrabold text-slate-100 text-3xl">MediDoc</h2><p class="text-sm font-medium text-slate-400 mt-1 uppercase tracking-widest">Versão Pro</p></div>
+                    <div class="bg-slate-900/60 backdrop-blur-xl p-6 rounded-3xl shadow-lg shadow-black/30 border border-slate-800 text-left space-y-4 max-w-sm mx-auto">
+                        <div class="text-[11px] font-extrabold text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-2">Informações do Autor</div>
+                        <div class="flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center text-slate-300 text-xl"><i class="fa-solid fa-user-doctor"></i></div>
+                            <div><p class="text-base font-bold text-slate-100">Dr. Cudzanai Elias</p><p class="text-xs font-semibold text-blue-400">Médico de Clínica Geral</p></div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            history.replaceState(getCurrentState(), '', '');
+            render();
+        });
+    </script>
+</body>
+</html>
